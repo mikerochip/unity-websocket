@@ -1,11 +1,15 @@
 # Mikerochip's Unity Web Socket
 
-Easy to use, flexible WebSocket client as a MonoBehaviour
+Easy-to-use, flexible WebSocket client as a simple MonoBehaviour.
 
-* Single `WebSocketConnection` component and 2 enums
-* Use from your `async/await`, Coroutines, or Update() code
-* Compatible with WebGL
-* No installing external dependencies
+* Single `WebSocketConnection` MonoBehaviour and 2 enums
+* Does not require you to use `async/await` or Coroutines
+* Works with WebGL using bundled JavaScript lib `WebSocket.jslib`
+* Works on other platforms using built-in `System.Net.WebSockets`
+
+# Minimum Install Requirements
+
+Unity 2019.1 with .NET 4.x Runtime or higher
 
 # Attribution
 
