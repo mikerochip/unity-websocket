@@ -1,13 +1,18 @@
 # Mikerochip's Unity WebSocket
 
-Easy-to-use, flexible WebSocket client as a simple MonoBehaviour.
+Easy-to-use, flexible WebSocket client as a MonoBehaviour called `WebSocketConnection`
 
-* Easy-to-use, configurable `WebSocketConnection` MonoBehaviour
-* Flexible config. URL is the only requirement, sane defaults otherwise.
-* Does not force you into using `async/await` or Coroutines - code however you want
-* It Just Works - public API prevents bad internal states
-* Works with WebGL using bundled JavaScript lib `WebSocket.jslib`
-* Works on other platforms using built-in `System.Net.WebSockets`
+* Add `WebSocketConnection` to a GameObject in the editor, or add one programmatically
+* Flexible config
+   * URL is the only requirement
+   * Sane defaults
+* It Just Works
+   * Does not force you into using `async/await` or `Coroutine`
+   * Buffers state changes and messages, sends simple events
+   * Public API prevents altering active connections
+* Supports WebGL and any platform that implements `System.Net.WebSockets`
+   * WebGL uses a bundled JavaScript lib `WebSocket.jslib`
+   * Other platforms use `ClientWebSocket`, implementation complexities are abstracted away for you
 
 # Install
 
