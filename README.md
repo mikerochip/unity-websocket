@@ -10,9 +10,9 @@ Easy-to-use, flexible WebSocket client as a MonoBehaviour called `WebSocketConne
    * Does not force you into using `async/await` or `Coroutine`
    * Buffers state changes and messages, sends simple events
    * Public API prevents altering active connections
-* Supports WebGL and any platform that implements `System.Net.WebSockets`
+* Wide platform support with no external dependencies
    * WebGL uses a bundled JavaScript lib `WebSocket.jslib`
-   * Other platforms use `ClientWebSocket`, implementation complexities are abstracted away for you
+   * Otherwise uses `System.Net.WebSockets.ClientWebSocket`, implementation complexity is abstracted away for you
 
 # Install
 
