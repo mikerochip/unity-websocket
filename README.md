@@ -2,12 +2,12 @@
 
 Easy-to-use, flexible WebSocket client as a simple MonoBehaviour.
 
-* Simple `WebSocketConnection` MonoBehaviour, just works out of the box
-* Configurable with sane defaults. A URL is the only required config.
+* Easy-to-use, configurable `WebSocketConnection` MonoBehaviour
+* URL is the only required config, sane defaults otherwise
 * Does not force you to use `async/await` or Coroutines
 * Works with WebGL using bundled JavaScript lib `WebSocket.jslib`
 * Works on other platforms using built-in `System.Net.WebSockets`
-* Public API prevents corrupting the state of an active connection
+* Just Works - public API prevents bad internal states
 
 # Minimum Install Requirements
 
