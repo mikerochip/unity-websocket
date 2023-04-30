@@ -1,5 +1,5 @@
-Copyright 2023 Michael Schweitzer <mschweitzer@gmail.com>
-Copyright 2019 Endel Dreyer <endel.dreyer@gmail.com>
+Copyright 2023 Michael Schweitzer <mschweitzer@gmail.com>\
+Copyright 2019 Endel Dreyer <endel.dreyer@gmail.com>\
 Copyright 2018 Jiri Hybek <jiri@hybek.cz>
 
 Licensed under the Apache License, Version 2.0 (the "License");
