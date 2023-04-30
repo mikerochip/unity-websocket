@@ -12,7 +12,7 @@ using System.Runtime.InteropServices;
 using UnityEngine;
 using System.Collections;
 
-public class MainThreadUtil : MonoBehaviour
+internal class MainThreadUtil : MonoBehaviour
 {
     public static MainThreadUtil Instance { get; private set; }
     public static SynchronizationContext synchronizationContext { get; private set; }
@@ -38,7 +38,7 @@ public class MainThreadUtil : MonoBehaviour
     }
 }
 
-public class WaitForUpdate : CustomYieldInstruction
+internal class WaitForUpdate : CustomYieldInstruction
 {
     public override bool keepWaiting
     {
@@ -81,12 +81,12 @@ public class WaitForUpdate : CustomYieldInstruction
 
 namespace NativeWebSocket
 {
-    public delegate void WebSocketOpenEventHandler();
-    public delegate void WebSocketMessageEventHandler(byte[] data);
-    public delegate void WebSocketErrorEventHandler(string errorMsg);
-    public delegate void WebSocketCloseEventHandler(WebSocketCloseCode closeCode);
+    internal delegate void WebSocketOpenEventHandler();
+    internal delegate void WebSocketMessageEventHandler(byte[] data);
+    internal delegate void WebSocketErrorEventHandler(string errorMsg);
+    internal delegate void WebSocketCloseEventHandler(WebSocketCloseCode closeCode);
 
-    public enum WebSocketCloseCode
+    internal enum WebSocketCloseCode
     {
         /* Do NOT use NotSet - it's only purpose is to indicate that the close code cannot be parsed. */
         NotSet = 0,
@@ -105,7 +105,7 @@ namespace NativeWebSocket
         TlsHandshakeFailure = 1015
     }
 
-    public enum WebSocketState
+    internal enum WebSocketState
     {
         Connecting,
         Open,
@@ -113,7 +113,7 @@ namespace NativeWebSocket
         Closed
     }
 
-    public interface IWebSocket
+    internal interface IWebSocket
     {
         event WebSocketOpenEventHandler OnOpen;
         event WebSocketMessageEventHandler OnMessage;
@@ -123,7 +123,7 @@ namespace NativeWebSocket
         WebSocketState State { get; }
     }
 
-    public static class WebSocketHelpers
+    internal static class WebSocketHelpers
     {
         public static WebSocketCloseCode ParseCloseCodeEnum(int closeCode)
         {
@@ -363,7 +363,7 @@ namespace NativeWebSocket
 
 #else
 
-    public class WebSocket : IWebSocket
+    internal class WebSocket : IWebSocket
     {
         public event WebSocketOpenEventHandler OnOpen;
         public event WebSocketMessageEventHandler OnMessage;
@@ -718,7 +718,7 @@ namespace NativeWebSocket
     /// <summary>
     /// Class providing static access methods to work with JSLIB WebSocket or WebSocketSharp interface
     /// </summary>
-    public static class WebSocketFactory
+    internal static class WebSocketFactory
     {
 
 #if UNITY_WEBGL && !UNITY_EDITOR
