@@ -144,7 +144,7 @@ namespace Mikerochip.WebSocket
         #region Unity Methods
         private async void Awake()
         {
-            await Task.WhenAll(ManageStateAsync(), ReceiveAsync(), SendAsync());
+            await Task.WhenAll(ManageStateAsync(), ConnectAsync(), ReceiveAsync(), SendAsync());
         }
         #endregion
 
@@ -170,7 +170,7 @@ namespace Mikerochip.WebSocket
                     
                     State = WebSocketState.Connecting;
                     InitializeWebSocket();
-                    _connectTask = _webSocket!.Connect();
+                    _connectTask = _webSocket.Connect();
                 }
                 else if (DesiredState == WebSocketDesiredState.Disconnect)
                 {
@@ -187,13 +187,22 @@ namespace Mikerochip.WebSocket
             }
         }
 
-        private async Task ReceiveAsync()
+        private async Task ConnectAsync()
         {
             while (true)
             {
                 if (_connectTask != null)
                     await _connectTask;
 
+                await Task.Yield();
+            }
+        }
+
+        private async Task ReceiveAsync()
+        {
+            while (true)
+            {
+                _webSocket?.ProcessIncomingMessages();
                 await Task.Yield();
             }
         }

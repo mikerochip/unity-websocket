@@ -139,6 +139,8 @@ namespace NativeWebSocket
         event ClosedHandler Closed;
 
         WebSocketState State { get; }
+
+        void ProcessIncomingMessages();
     }
 
 #if !UNITY_WEBGL || UNITY_EDITOR
@@ -394,8 +396,7 @@ namespace NativeWebSocket
 
         private List<byte[]> m_MessageList = new List<byte[]>();
 
-        // simple dispatcher for queued messages.
-        public void DispatchMessageQueue()
+        public void ProcessIncomingMessages()
         {
             if (m_MessageList.Count == 0)
             {
@@ -525,8 +526,11 @@ namespace NativeWebSocket
         }
         #endregion
         
-        #region Internal Properties
-        private int InstanceId { get; }
+        #region Private Fields
+        private readonly int _instanceId;
+        // incoming message buffering isn't strictly necessary, it's for API consistency with
+        // the System.Net.WebSockets path
+        private readonly Queue<byte[]> _incomingMessages = new Queue<byte[]>();
         #endregion
 
         #region Ctor/Dtor
@@ -534,22 +538,34 @@ namespace NativeWebSocket
         {
             JsLibBridge.Initialize();
 
-            InstanceId = JsLibBridge.AddInstance(url, this);
+            _instanceId = JsLibBridge.AddInstance(url, this);
 
             foreach (var subprotocol in subprotocols)
-                JsLibBridge.WebSocketAddSubProtocol(InstanceId, subprotocol);
+                JsLibBridge.WebSocketAddSubProtocol(_instanceId, subprotocol);
         }
 
         ~WebSocket()
         {
-            JsLibBridge.RemoveInstance(InstanceId);
+            JsLibBridge.RemoveInstance(_instanceId);
         }
         #endregion
 
-        #region Public API
+        #region IWebSocket Methods
+        public void ProcessIncomingMessages()
+        {
+            if (_incomingMessages.Count == 0)
+                return;
+            
+            var messages = _incomingMessages.ToArray();
+            _incomingMessages.Clear();
+            
+            foreach (var message in messages)
+                MessageReceived?.Invoke(message);
+        }
+        
         public Task Connect()
         {
-            var ret = WebSocketConnect(InstanceId);
+            var ret = WebSocketConnect(_instanceId);
 
             if (ret < 0)
                 Error?.Invoke(ErrorCodeToMessage(ret));
@@ -565,7 +581,7 @@ namespace NativeWebSocket
 
         public Task Close(WebSocketCloseCode code = WebSocketCloseCode.Normal, string reason = null)
         {
-            var ret = WebSocketClose(InstanceId, (int)code, reason);
+            var ret = WebSocketClose(_instanceId, (int)code, reason);
 
             if (ret < 0)
                 Error?.Invoke(ErrorCodeToMessage(ret));
@@ -585,7 +601,7 @@ namespace NativeWebSocket
 
         public Task SendText(string message)
         {
-            var ret = WebSocketSendText(InstanceId, message);
+            var ret = WebSocketSendText(_instanceId, message);
 
             if (ret < 0)
                 Error?.Invoke(ErrorCodeToMessage(ret));
@@ -634,7 +650,7 @@ namespace NativeWebSocket
 
         #region JsLibBridge Event Helpers
         public void OnOpen() => Opened?.Invoke();
-        public void OnMessage(byte[] data) => MessageReceived?.Invoke(data);
+        public void OnMessage(byte[] data) => _incomingMessages.Enqueue(data);
         public void OnError(string errorMsg) => Error?.Invoke(errorMsg);
         public void OnClose(int closeCode) => Closed?.Invoke(WebSocketHelpers.ConvertCloseCode(closeCode));
         #endregion
