@@ -162,9 +162,6 @@ namespace NativeWebSocket
         private CancellationTokenSource _cancellationTokenSource;
         private CancellationToken _cancellationToken;
 
-        private readonly object OutgoingMessageLock = new object();
-        private readonly object IncomingMessageLock = new object();
-
         private bool isSending = false;
         private readonly Queue<byte[]> _incomingMessages = new Queue<byte[]>();
         private readonly Queue<ArraySegment<byte>> _outgoingMessages = new Queue<ArraySegment<byte>>();
@@ -271,7 +268,7 @@ namespace NativeWebSocket
             // The state of the connection is contained in the context Items dictionary.
             bool sending;
 
-            lock (OutgoingMessageLock)
+            lock (_outgoingMessages)
             {
                 sending = isSending;
 
@@ -304,7 +301,7 @@ namespace NativeWebSocket
                 }
 
                 // Note that we've finished sending.
-                lock (OutgoingMessageLock)
+                lock (_outgoingMessages)
                 {
                     isSending = false;
                 }
@@ -315,7 +312,7 @@ namespace NativeWebSocket
             else
             {
                 // Add the message to the queue.
-                lock (OutgoingMessageLock)
+                lock (_outgoingMessages)
                 {
                     _outgoingMessages.Enqueue(buffer);
                 }
@@ -326,7 +323,7 @@ namespace NativeWebSocket
         {
             ArraySegment<byte> buffer = null;
             
-            lock (OutgoingMessageLock)
+            lock (_outgoingMessages)
             {
                 if (_outgoingMessages.Count > 0)
                     buffer = _outgoingMessages.Dequeue();
@@ -344,7 +341,7 @@ namespace NativeWebSocket
                 return;
 
             List<byte[]> messages;
-            lock (IncomingMessageLock)
+            lock (_incomingMessages)
             {
                 messages = new List<byte[]>(_incomingMessages);
                 _incomingMessages.Clear();
@@ -364,10 +361,9 @@ namespace NativeWebSocket
             {
                 while (_socket.State == System.Net.WebSockets.WebSocketState.Open)
                 {
-                    WebSocketReceiveResult result = null;
-
                     using (var ms = new MemoryStream())
                     {
+                        WebSocketReceiveResult result;
                         do
                         {
                             result = await _socket.ReceiveAsync(buffer, _cancellationToken);
@@ -375,27 +371,17 @@ namespace NativeWebSocket
                         }
                         while (!result.EndOfMessage);
 
-                        ms.Seek(0, SeekOrigin.Begin);
-
-                        if (result.MessageType == WebSocketMessageType.Text)
-                        {
-                            lock (IncomingMessageLock)
-                            {
-                              _incomingMessages.Enqueue(ms.ToArray());
-                            }
-                        }
-                        else if (result.MessageType == WebSocketMessageType.Binary)
-                        {
-                            lock (IncomingMessageLock)
-                            {
-                              _incomingMessages.Enqueue(ms.ToArray());
-                            }
-                        }
-                        else if (result.MessageType == WebSocketMessageType.Close)
+                        if (result.MessageType == WebSocketMessageType.Close)
                         {
                             await Close();
                             closeCode = WebSocketHelpers.ConvertCloseCode((int)result.CloseStatus);
                             break;
+                        }
+                        
+                        ms.Seek(0, SeekOrigin.Begin);
+                        lock (_incomingMessages)
+                        {
+                            _incomingMessages.Enqueue(ms.ToArray());
                         }
                     }
                 }
