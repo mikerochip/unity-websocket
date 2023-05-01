@@ -166,46 +166,6 @@ namespace NativeWebSocket
         private List<ArraySegment<byte>> sendBytesQueue = new List<ArraySegment<byte>>();
         private List<ArraySegment<byte>> sendTextQueue = new List<ArraySegment<byte>>();
 
-        public WebSocket(string url, Dictionary<string, string> headers = null)
-        {
-            uri = new Uri(url);
-
-            if (headers == null)
-            {
-                this.headers = new Dictionary<string, string>();
-            }
-            else
-            {
-                this.headers = headers;
-            }
-
-            subprotocols = new List<string>();
-
-            string protocol = uri.Scheme;
-            if (!protocol.Equals("ws") && !protocol.Equals("wss"))
-                throw new ArgumentException("Unsupported protocol: " + protocol);
-        }
-
-        public WebSocket(string url, string subprotocol, Dictionary<string, string> headers = null)
-        {
-            uri = new Uri(url);
-
-            if (headers == null)
-            {
-                this.headers = new Dictionary<string, string>();
-            }
-            else
-            {
-                this.headers = headers;
-            }
-
-            subprotocols = new List<string> {subprotocol};
-
-            string protocol = uri.Scheme;
-            if (!protocol.Equals("ws") && !protocol.Equals("wss"))
-                throw new ArgumentException("Unsupported protocol: " + protocol);
-        }
-
         public WebSocket(string url, List<string> subprotocols, Dictionary<string, string> headers = null)
         {
             uri = new Uri(url);
