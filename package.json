@@ -1,7 +1,7 @@
 {
   "name": "com.mikerochip.websocket",
   "version": "1.0.0",
-  "displayName": "WebSocketConnection",
+  "displayName": "Mikerochip WebSocket",
   "description": "Simple, flexible WebSocket client. Add the WebSocketConnection component anywhere in your scene.",
   "license": "Apache 2.0",
   "unity": "2019.1",
