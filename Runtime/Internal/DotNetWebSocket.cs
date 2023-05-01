@@ -99,7 +99,6 @@ namespace Mikerochip.WebSocket.Internal
         private CancellationToken _cancellationToken;
         private ClientWebSocket _socket = new ClientWebSocket();
 
-        private bool isSending = false;
         private readonly Queue<byte[]> _incomingMessages = new Queue<byte[]>();
         private readonly Queue<ArraySegment<byte>> _outgoingMessages = new Queue<ArraySegment<byte>>();
         #endregion
@@ -116,7 +115,7 @@ namespace Mikerochip.WebSocket.Internal
         {
             get
             {
-                switch (_socket.State)
+                switch (_socket?.State)
                 {
                     case System.Net.WebSockets.WebSocketState.Connecting:
                         return WebSocketState.Connecting;
@@ -209,23 +208,24 @@ namespace Mikerochip.WebSocket.Internal
             }
             finally
             {
-                if (_socket != null)
-                {
-                    _cancellationTokenSource.Cancel();
-                    _socket.Dispose();
-                }
+                _cancellationTokenSource.Cancel();
+                _socket = null;
             }
         }
 
-        public Task SendAsync(byte[] bytes)
+        public async Task SendAsync(byte[] bytes)
         {
             if (bytes.Length == 0)
-                return Task.CompletedTask;
+                return;
             
             if (bytes.Length > _maxSendBytes)
                 throw new ArgumentException($"Tried to send {bytes.Length} bytes (max {_maxSendBytes})");
 
-            return SendMessage(new ArraySegment<byte>(bytes));
+            if (_socket == null)
+                return;
+
+            var buffer = new ArraySegment<byte>(bytes);
+            await _socket.SendAsync(buffer, WebSocketMessageType.Binary, endOfMessage:true, _cancellationToken);
         }
 
         public Task CloseAsync()
@@ -237,79 +237,14 @@ namespace Mikerochip.WebSocket.Internal
                     break;
                 
                 default:
-                    _cancellationTokenSource.Cancel();
+                    _cancellationTokenSource?.Cancel();
                     break;
             }
             return Task.CompletedTask;
         }
+        #endregion
 
-        private async Task SendMessage(ArraySegment<byte> buffer)
-        {
-            bool sending;
-            lock (_outgoingMessages)
-            {
-                sending = isSending;
-                if (!isSending)
-                    isSending = true;
-            }
-
-            if (_cancellationToken.IsCancellationRequested)
-                return;
-
-            if (!sending)
-            {
-                // Lock with a timeout, just in case.
-                if (!Monitor.TryEnter(_socket, 1000))
-                {
-                    // If we couldn't obtain exclusive access to the socket in one second, something is wrong.
-                    await _socket.CloseAsync(WebSocketCloseStatus.InternalServerError, string.Empty, _cancellationToken);
-                    return;
-                }
-
-                try
-                {
-                    // Send the message synchronously.
-                    var t = _socket.SendAsync(buffer, WebSocketMessageType.Binary, true, _cancellationToken);
-                    t.Wait(_cancellationToken);
-                }
-                finally
-                {
-                    Monitor.Exit(_socket);
-                }
-
-                lock (_outgoingMessages)
-                    isSending = false;
-
-                if (_cancellationToken.IsCancellationRequested)
-                    return;
-
-                await HandleQueue();
-            }
-            else
-            {
-                lock (_outgoingMessages)
-                {
-                    _outgoingMessages.Enqueue(buffer);
-                }
-            }
-        }
-
-        private async Task HandleQueue()
-        {
-            ArraySegment<byte> buffer = null;
-            
-            lock (_outgoingMessages)
-            {
-                if (_outgoingMessages.Count > 0)
-                    buffer = _outgoingMessages.Dequeue();
-            }
-
-            if (buffer == null)
-                return;
-
-            await SendMessage(buffer);
-        }
-
+        #region Internal Methods
         private async Task ReceiveAsync()
         {
             await new WaitForBackgroundThread();
