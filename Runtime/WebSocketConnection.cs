@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using NativeWebSocket;
+using Mikerochip.WebSocket.Internal;
 using UnityEngine;
 
 namespace Mikerochip.WebSocket
@@ -82,7 +82,7 @@ namespace Mikerochip.WebSocket
         #endregion
 
         #region Private Fields
-        private NativeWebSocket.WebSocket _webSocket;
+        private Mikerochip.WebSocket.Internal.WebSocket _webSocket;
         private Task _connectTask;
         private readonly Queue<byte[]> _incomingMessages = new Queue<byte[]>();
         private readonly Queue<byte[]> _outgoingMessages = new Queue<byte[]>();
@@ -208,7 +208,7 @@ namespace Mikerochip.WebSocket
         {
             while (true)
             {
-                while (_webSocket?.State == NativeWebSocket.WebSocketState.Open &&
+                while (_webSocket?.State == Internal.WebSocketState.Open &&
                        _outgoingMessages.TryDequeue(out var bytes))
                 {
                     await _webSocket.SendAsync(bytes);
@@ -226,7 +226,12 @@ namespace Mikerochip.WebSocket
 
             ErrorMessage = null;
             
-            _webSocket = new NativeWebSocket.WebSocket(Config.Url, Config.Subprotocols, Config.Headers);
+            _webSocket = new Internal.WebSocket(
+                Config.Url,
+                Config.Subprotocols,
+                Config.Headers,
+                Config.MaxSendBytes,
+                Config.MaxReceiveBytes);
             _webSocket.Opened += WebSocketOnOpen;
             _webSocket.MessageReceived += WebSocketOnMessage;
             _webSocket.Closed += WebSocketOnClose;

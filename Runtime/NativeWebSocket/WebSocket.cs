@@ -87,7 +87,7 @@ internal class WaitForBackgroundThread
     }
 }
 
-namespace NativeWebSocket
+namespace Mikerochip.WebSocket.Internal
 {
     // see https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent/code
     internal enum WebSocketCloseCode
@@ -158,12 +158,14 @@ namespace NativeWebSocket
 
         #region Private Fields
         private readonly Uri _uri;
-        private readonly Dictionary<string, string> _headers;
         private readonly List<string> _subprotocols;
-        private ClientWebSocket _socket = new ClientWebSocket();
-
+        private readonly Dictionary<string, string> _headers;
+        private readonly int _maxSendBytes;
+        private readonly int _maxReceiveBytes;
+        
         private CancellationTokenSource _cancellationTokenSource;
         private CancellationToken _cancellationToken;
+        private ClientWebSocket _socket = new ClientWebSocket();
 
         private bool isSending = false;
         private readonly Queue<byte[]> _incomingMessages = new Queue<byte[]>();
@@ -198,19 +200,23 @@ namespace NativeWebSocket
         #endregion
 
         #region Ctor/Dtor
-        public WebSocket(string url, IEnumerable<string> subprotocols, Dictionary<string, string> headers = null)
+        public WebSocket(
+            string url,
+            IEnumerable<string> subprotocols,
+            Dictionary<string, string> headers = null,
+            int maxSendBytes = 4096,
+            int maxReceiveBytes = 4096)
         {
-            _uri = new Uri(url);
-
-            _headers = headers == null
-                ? new Dictionary<string, string>()
-                : headers.ToDictionary(pair => pair.Key, pair => pair.Value);
-
-            _subprotocols = subprotocols.ToList();
-
-            string protocol = _uri.Scheme;
+            var uri = new Uri(url);
+            var protocol = uri.Scheme;
             if (!protocol.Equals("ws") && !protocol.Equals("wss"))
-                throw new ArgumentException("Unsupported protocol: " + protocol);
+                throw new ArgumentException($"Unsupported protocol: {protocol}");
+
+            _uri = uri;
+            _subprotocols = subprotocols?.ToList();
+            _headers = headers?.ToDictionary(pair => pair.Key, pair => pair.Value);
+            _maxSendBytes = maxSendBytes;
+            _maxReceiveBytes = maxReceiveBytes;
         }
         #endregion
 
@@ -240,13 +246,16 @@ namespace NativeWebSocket
 
                 _socket = new ClientWebSocket();
 
-                foreach (var header in _headers)
+                if (_subprotocols != null)
                 {
-                    _socket.Options.SetRequestHeader(header.Key, header.Value);
+                    foreach (var subprotocol in _subprotocols)
+                        _socket.Options.AddSubProtocol(subprotocol);
                 }
 
-                foreach (string subprotocol in _subprotocols) {
-                    _socket.Options.AddSubProtocol(subprotocol);
+                if (_headers != null)
+                {
+                    foreach (var header in _headers)
+                        _socket.Options.SetRequestHeader(header.Key, header.Value);
                 }
 
                 await _socket.ConnectAsync(_uri, _cancellationToken);
@@ -273,6 +282,9 @@ namespace NativeWebSocket
         {
             if (bytes.Length == 0)
                 return Task.CompletedTask;
+            
+            if (bytes.Length > _maxSendBytes)
+                throw new ArgumentException($"Tried to send {bytes.Length} bytes (max {_maxSendBytes})");
 
             return SendMessage(new ArraySegment<byte>(bytes));
         }
@@ -361,10 +373,10 @@ namespace NativeWebSocket
 
         private async Task ReceiveAsync()
         {
-            WebSocketCloseCode closeCode = WebSocketCloseCode.Normal;
             await new WaitForBackgroundThread();
 
-            ArraySegment<byte> buffer = new ArraySegment<byte>(new byte[8192]);
+            var closeCode = WebSocketCloseCode.Normal;
+            var buffer = new ArraySegment<byte>(new byte[_maxReceiveBytes]);
             try
             {
                 while (_socket.State == System.Net.WebSockets.WebSocketState.Open)
@@ -372,11 +384,22 @@ namespace NativeWebSocket
                     using (var ms = new MemoryStream())
                     {
                         WebSocketReceiveResult result;
+                        var bytes = 0;
                         do
                         {
                             result = await _socket.ReceiveAsync(buffer, _cancellationToken);
                             if (_cancellationToken.IsCancellationRequested)
                                 break;
+                            
+                            bytes += result.Count;
+                            if (bytes >= _maxReceiveBytes)
+                            {
+                                Error?.Invoke($"Received {bytes} bytes (max {_maxReceiveBytes}");
+                                while (!result.EndOfMessage)
+                                    result = await _socket.ReceiveAsync(buffer, _cancellationToken);
+                                continue;
+                            }
+                            
                             ms.Write(buffer.Array, buffer.Offset, result.Count);
                         }
                         while (!result.EndOfMessage);
@@ -448,6 +471,8 @@ namespace NativeWebSocket
         #endregion
         
         #region Private Fields
+        private readonly int _maxSendBytes;
+        private readonly int _maxReceiveBytes;
         private readonly int _instanceId;
         // incoming message buffering isn't strictly necessary, it's for API consistency with
         // the System.Net.WebSockets path
@@ -455,12 +480,20 @@ namespace NativeWebSocket
         #endregion
 
         #region Ctor/Dtor
-        public WebSocket(string url, IEnumerable<string> subprotocols, Dictionary<string, string> headers = null)
+        public WebSocket(
+            string url,
+            IEnumerable<string> subprotocols,
+            Dictionary<string, string> headers = null,
+            int maxSendBytes = 4096,
+            int maxReceiveBytes = 4096)
         {
             var uri = new Uri(url);
             var protocol = uri.Scheme;
             if (!protocol.Equals("ws") && !protocol.Equals("wss"))
                 throw new ArgumentException("Unsupported protocol: " + protocol);
+
+            _maxSendBytes = maxSendBytes;
+            _maxReceiveBytes = maxReceiveBytes;
 
             JsLibBridge.Initialize();
 
@@ -474,7 +507,7 @@ namespace NativeWebSocket
         #endregion
 
         #region IWebSocket Methods
-        public void ProcessIncomingMessages()
+        public void ProcessReceivedMessages()
         {
             if (_incomingMessages.Count == 0)
                 return;
@@ -498,6 +531,9 @@ namespace NativeWebSocket
 
         public Task SendAsync(byte[] bytes)
         {
+            if (bytes.Length > _maxSendBytes)
+                throw new ArgumentException($"Tried to send {bytes.Length} bytes (max {_maxSendBytes})");
+            
             var ret = WebSocketSend(_instanceId, bytes, bytes.Length);
 
             if (ret < 0)
@@ -562,7 +598,16 @@ namespace NativeWebSocket
 
         #region JsLibBridge Event Helpers
         public void OnOpen() => Opened?.Invoke();
-        public void OnMessage(byte[] data) => _incomingMessages.Enqueue(data);
+        public void OnMessage(byte[] bytes)
+        {
+            if (bytes.Length > _maxReceiveBytes)
+            {
+                Error?.Invoke($"Received {bytes.Length} bytes (max {_maxReceiveBytes}");
+                return;
+            }
+            
+            _incomingMessages.Enqueue(bytes);
+        }
         public void OnError(string errorMsg) => Error?.Invoke(errorMsg);
         public void OnClose(int closeCode) => Closed?.Invoke(WebSocketHelpers.ConvertCloseCode(closeCode));
         #endregion
@@ -645,10 +690,10 @@ namespace NativeWebSocket
         {
             if (Instances.TryGetValue(instanceId, out var instance))
             {
-                var msg = new byte[msgSize];
-                Marshal.Copy(msgPtr, msg, 0, msgSize);
+                var bytes = new byte[msgSize];
+                Marshal.Copy(msgPtr, bytes, 0, msgSize);
 
-                instance.OnMessage(msg);
+                instance.OnMessage(bytes);
             }
         }
 
