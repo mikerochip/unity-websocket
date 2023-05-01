@@ -1,16 +1,16 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-
 using AOT;
-using System.Runtime.InteropServices;
 using UnityEngine;
-using System.Collections;
 
 internal class MainThreadUtil : MonoBehaviour
 {
@@ -166,7 +166,7 @@ namespace NativeWebSocket
         private List<ArraySegment<byte>> sendBytesQueue = new List<ArraySegment<byte>>();
         private List<ArraySegment<byte>> sendTextQueue = new List<ArraySegment<byte>>();
 
-        public WebSocket(string url, List<string> subprotocols, Dictionary<string, string> headers = null)
+        public WebSocket(string url, IEnumerable<string> subprotocols, Dictionary<string, string> headers = null)
         {
             uri = new Uri(url);
 
@@ -179,7 +179,7 @@ namespace NativeWebSocket
                 this.headers = headers;
             }
 
-            this.subprotocols = subprotocols;
+            this.subprotocols = subprotocols.ToList();
 
             string protocol = uri.Scheme;
             if (!protocol.Equals("ws") && !protocol.Equals("wss"))
@@ -495,7 +495,7 @@ namespace NativeWebSocket
         #endregion
 
         #region Ctor/Dtor
-        public WebSocket(string url, List<string> subprotocols, Dictionary<string, string> headers = null)
+        public WebSocket(string url, IEnumerable<string> subprotocols, Dictionary<string, string> headers = null)
         {
             var uri = new Uri(url);
             var protocol = uri.Scheme;
@@ -504,10 +504,7 @@ namespace NativeWebSocket
 
             JsLibBridge.Initialize();
 
-            _instanceId = JsLibBridge.AddInstance(url, this);
-
-            foreach (var subprotocol in subprotocols)
-                JsLibBridge.WebSocketAddSubProtocol(_instanceId, subprotocol);
+            _instanceId = JsLibBridge.AddInstance(this, url, subprotocols);
         }
 
         ~WebSocket()
@@ -633,9 +630,9 @@ namespace NativeWebSocket
         [DllImport ("__Internal")]
         public static extern int WebSocketAllocate(string url);
         [DllImport ("__Internal")]
-        public static extern void WebSocketFree(int instanceId);
+        public static extern int WebSocketAddSubprotocol(int instanceId, string subprotocol);
         [DllImport ("__Internal")]
-        public static extern int WebSocketAddSubProtocol(int instanceId, string subprotocol);
+        public static extern void WebSocketFree(int instanceId);
         [DllImport ("__Internal")]
         public static extern void WebSocketSetOnOpen(OpenCallback callback);
         [DllImport ("__Internal")]
@@ -668,9 +665,13 @@ namespace NativeWebSocket
             WebSocketSetOnClose(OnClose);
         }
 
-        public static int AddInstance(string url, WebSocket instance)
+        public static int AddInstance(WebSocket instance, string url, IEnumerable<string> subprotocols)
         {
             var instanceId = WebSocketAllocate(url);
+
+            foreach (var subprotocol in subprotocols)
+                WebSocketAddSubprotocol(instanceId, subprotocol);
+            
             Instances.Add(instanceId, instance);
             return instanceId;
         }

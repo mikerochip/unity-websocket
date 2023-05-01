@@ -80,7 +80,7 @@ var LibraryWebSocket = {
 		var id = webSocketState.lastId++;
 
 		webSocketState.instances[id] = {
-		  subprotocols: [],
+			subprotocols: [],
 			url: urlStr,
 			ws: null
 		};
@@ -89,18 +89,18 @@ var LibraryWebSocket = {
 
 	},
 
-  /**
-   * Add subprotocol to instance
-   *
-   * @param instanceId Instance ID
-   * @param subprotocol Subprotocol name to add to instance
-   */
-  WebSocketAddSubProtocol: function(instanceId, subprotocol) {
+	/**
+	 * Add subprotocol to instance
+	 *
+	 * @param instanceId Instance ID
+	 * @param subprotocol Subprotocol name to add to instance
+	 */
+	WebSocketAddSubProtocol: function(instanceId, subprotocol) {
 
-    var subprotocolStr = UTF8ToString(subprotocol);
-    webSocketState.instances[instanceId].subprotocols.push(subprotocolStr);
+		var subprotocolStr = UTF8ToString(subprotocol);
+		webSocketState.instances[instanceId].subprotocols.push(subprotocolStr);
 
-  },
+	},
 
 	/**
 	 * Remove reference to WebSocket instance
@@ -175,7 +175,7 @@ var LibraryWebSocket = {
 					_free(buffer);
 				}
 
-      } else {
+			} else {
 				var dataBuffer = (new TextEncoder()).encode(ev.data);
 
 				var buffer = _malloc(dataBuffer.length);
