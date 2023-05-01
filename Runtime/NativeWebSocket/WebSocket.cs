@@ -94,9 +94,9 @@ namespace NativeWebSocket
     internal delegate void WebSocketErrorEventHandler(string errorMsg);
     internal delegate void WebSocketCloseEventHandler(WebSocketCloseCode closeCode);
 
+    // see https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent/code
     internal enum WebSocketCloseCode
     {
-        /* Do NOT use NotSet - it's only purpose is to indicate that the close code cannot be parsed. */
         NotSet = 0,
         Normal = 1000,
         Away = 1001,
@@ -121,72 +121,16 @@ namespace NativeWebSocket
         Closed
     }
 
-    internal static class WebSocketHelpers
+    internal static partial class WebSocketHelpers
     {
-        public static WebSocketCloseCode ParseCloseCodeEnum(int closeCode)
+        public static WebSocketCloseCode ConvertCloseCode(int closeCode)
         {
-            if (WebSocketCloseCode.IsDefined(typeof(WebSocketCloseCode), closeCode))
-            {
-                return (WebSocketCloseCode)closeCode;
-            }
-            else
-            {
-                return WebSocketCloseCode.Undefined;
-            }
-        }
-
-        public static WebSocketException GetErrorMessageFromCode(int errorCode, Exception inner)
-        {
-            switch (errorCode)
-            {
-                case -1:
-                    return new WebSocketUnexpectedException("WebSocket instance not found.", inner);
-                case -2:
-                    return new WebSocketInvalidStateException("WebSocket is already connected or in connecting state.", inner);
-                case -3:
-                    return new WebSocketInvalidStateException("WebSocket is not connected.", inner);
-                case -4:
-                    return new WebSocketInvalidStateException("WebSocket is already closing.", inner);
-                case -5:
-                    return new WebSocketInvalidStateException("WebSocket is already closed.", inner);
-                case -6:
-                    return new WebSocketInvalidStateException("WebSocket is not in open state.", inner);
-                case -7:
-                    return new WebSocketInvalidArgumentException("Cannot close WebSocket. An invalid code was specified or reason is too long.", inner);
-                default:
-                    return new WebSocketUnexpectedException("Unknown error.", inner);
-            }
+            if (Enum.IsDefined(typeof(WebSocketCloseCode), closeCode))
+                return (WebSocketCloseCode) closeCode;
+            return WebSocketCloseCode.Undefined;
         }
     }
-
-    public class WebSocketException : Exception
-    {
-        public WebSocketException() { }
-        public WebSocketException(string message) : base(message) { }
-        public WebSocketException(string message, Exception inner) : base(message, inner) { }
-    }
-
-    public class WebSocketUnexpectedException : WebSocketException
-    {
-        public WebSocketUnexpectedException() { }
-        public WebSocketUnexpectedException(string message) : base(message) { }
-        public WebSocketUnexpectedException(string message, Exception inner) : base(message, inner) { }
-    }
-
-    public class WebSocketInvalidArgumentException : WebSocketException
-    {
-        public WebSocketInvalidArgumentException() { }
-        public WebSocketInvalidArgumentException(string message) : base(message) { }
-        public WebSocketInvalidArgumentException(string message, Exception inner) : base(message, inner) { }
-    }
-
-    public class WebSocketInvalidStateException : WebSocketException
-    {
-        public WebSocketInvalidStateException() { }
-        public WebSocketInvalidStateException(string message) : base(message) { }
-        public WebSocketInvalidStateException(string message, Exception inner) : base(message, inner) { }
-    }
-
+    
     internal interface IWebSocket
     {
         event WebSocketOpenEventHandler OnOpen;
@@ -197,149 +141,7 @@ namespace NativeWebSocket
         WebSocketState State { get; }
     }
 
-#if UNITY_WEBGL && !UNITY_EDITOR
-
-    internal class WebSocket : IWebSocket
-    {
-        #region JSLib Interop
-        [DllImport("__Internal")]
-        public static extern int WebSocketConnect(int instanceId);
-        [DllImport("__Internal")]
-        public static extern int WebSocketClose(int instanceId, int code, string reason);
-        [DllImport("__Internal")]
-        public static extern int WebSocketSend(int instanceId, byte[] dataPtr, int dataLength);
-        [DllImport("__Internal")]
-        public static extern int WebSocketSendText(int instanceId, string message);
-        [DllImport("__Internal")]
-        public static extern int WebSocketGetState(int instanceId);
-        #endregion
-
-        #region IWebSocket Events
-        public event WebSocketOpenEventHandler OnOpen;
-        public event WebSocketMessageEventHandler OnMessage;
-        public event WebSocketErrorEventHandler OnError;
-        public event WebSocketCloseEventHandler OnClose;
-        #endregion
-
-        #region Public Properties
-        public int InstanceId { get; }
-
-        public WebSocketState State
-        {
-            get 
-            {
-                var state = WebSocketGetState(InstanceId);
-
-                if (state < 0) 
-                    throw WebSocketHelpers.GetErrorMessageFromCode(state, null);
-
-                switch (state)
-                {
-                    case 0:
-                        return WebSocketState.Connecting;
-                    case 1:
-                        return WebSocketState.Open;
-                    case 2:
-                        return WebSocketState.Closing;
-                    case 3:
-                        return WebSocketState.Closed;
-                    default:
-                        return WebSocketState.Closed;
-                }
-            }
-        }
-        #endregion
-
-        #region Ctor/Dtor
-        public WebSocket(string url, List<string> subprotocols, Dictionary<string, string> headers = null)
-        {
-            WebSocketMarshal.Initialize();
-
-            InstanceId = WebSocketMarshal.AddInstance(url, this);
-
-            foreach (var subprotocol in subprotocols)
-                WebSocketMarshal.WebSocketAddSubProtocol(InstanceId, subprotocol);
-        }
-
-        ~WebSocket()
-        {
-            WebSocketMarshal.RemoveInstance(InstanceId);
-        }
-        #endregion
-
-        #region Public API
-        public Task Connect()
-        {
-            var ret = WebSocketConnect(InstanceId);
-
-            if (ret < 0)
-                throw WebSocketHelpers.GetErrorMessageFromCode(ret, null);
-
-            return Task.CompletedTask;
-        }
-
-        public void CancelConnection()
-        {
-            if (State == WebSocketState.Open)
-                Close(WebSocketCloseCode.Abnormal);
-        }
-
-        public Task Close(WebSocketCloseCode code = WebSocketCloseCode.Normal, string reason = null)
-        {
-            var ret = WebSocketClose(InstanceId, (int)code, reason);
-
-            if (ret < 0)
-                throw WebSocketHelpers.GetErrorMessageFromCode (ret, null);
-
-            return Task.CompletedTask;
-        }
-
-        public Task Send(byte[] data)
-        {
-            var ret = WebSocketSend(InstanceId, data, data.Length);
-
-            if (ret < 0)
-                throw WebSocketHelpers.GetErrorMessageFromCode (ret, null);
-
-            return Task.CompletedTask;
-        }
-
-        public Task SendText(string message)
-        {
-            var ret = WebSocketSendText(InstanceId, message);
-
-            if (ret < 0)
-                throw WebSocketHelpers.GetErrorMessageFromCode (ret, null);
-
-            return Task.CompletedTask;
-        }
-        #endregion
-
-        #region JSLib Events
-        public void TriggerOnOpen()
-        {
-            OnOpen?.Invoke();
-        }
-
-        public void TriggerOnMessage(byte[] data)
-        {
-            OnMessage?.Invoke(data);
-        }
-
-        public void TriggerOnError(string errorMsg)
-        {
-            OnError?.Invoke(errorMsg);
-        }
-
-        public void TriggerOnClose(int closeCode)
-        {
-            OnClose?.Invoke(WebSocketHelpers.ParseCloseCodeEnum(closeCode));
-        }
-        #endregion
-    }
-
-#else
-
+#if false //!UNITY_WEBGL || UNITY_EDITOR
     internal class WebSocket : IWebSocket
     {
         public event WebSocketOpenEventHandler OnOpen;
@@ -686,11 +488,202 @@ namespace NativeWebSocket
             }
         }
     }
-#endif
-
-    internal static class WebSocketMarshal
+#else
+    internal static partial class WebSocketHelpers
     {
-#if UNITY_WEBGL && !UNITY_EDITOR
+        public static WebSocketException GetExceptionFromErrorCode(int errorCode)
+        {
+            switch (errorCode)
+            {
+                case -1:
+                    return new WebSocketUnexpectedException("WebSocket instance not found.");
+                case -2:
+                    return new WebSocketInvalidStateException("WebSocket is already connected or in connecting state.");
+                case -3:
+                    return new WebSocketInvalidStateException("WebSocket is not connected.");
+                case -4:
+                    return new WebSocketInvalidStateException("WebSocket is already closing.");
+                case -5:
+                    return new WebSocketInvalidStateException("WebSocket is already closed.");
+                case -6:
+                    return new WebSocketInvalidStateException("WebSocket is not in open state.");
+                case -7:
+                    return new WebSocketInvalidArgumentException("Cannot close WebSocket. An invalid code was specified or reason is too long.");
+                default:
+                    return new WebSocketUnexpectedException("Unknown error.");
+            }
+        }
+
+        public class WebSocketException : Exception
+        {
+            public WebSocketException(string message) : base(message)
+            {
+            }
+        }
+
+        public class WebSocketUnexpectedException : WebSocketException
+        {
+            public WebSocketUnexpectedException(string message) : base(message)
+            {
+            }
+        }
+
+        public class WebSocketInvalidArgumentException : WebSocketException
+        {
+            public WebSocketInvalidArgumentException(string message) : base(message)
+            {
+            }
+        }
+
+        public class WebSocketInvalidStateException : WebSocketException
+        {
+            public WebSocketInvalidStateException(string message) : base(message)
+            {
+            }
+        }
+    }
+
+    internal class WebSocket : IWebSocket
+    {
+        #region JSLib Interop
+        [DllImport("__Internal")]
+        public static extern int WebSocketConnect(int instanceId);
+        [DllImport("__Internal")]
+        public static extern int WebSocketClose(int instanceId, int code, string reason);
+        [DllImport("__Internal")]
+        public static extern int WebSocketSend(int instanceId, byte[] dataPtr, int dataLength);
+        [DllImport("__Internal")]
+        public static extern int WebSocketSendText(int instanceId, string message);
+        [DllImport("__Internal")]
+        public static extern int WebSocketGetState(int instanceId);
+        #endregion
+
+        #region IWebSocket Events
+        public event WebSocketOpenEventHandler OnOpen;
+        public event WebSocketMessageEventHandler OnMessage;
+        public event WebSocketErrorEventHandler OnError;
+        public event WebSocketCloseEventHandler OnClose;
+        #endregion
+
+        #region Public Properties
+        public int InstanceId { get; }
+
+        public WebSocketState State
+        {
+            get 
+            {
+                var state = WebSocketGetState(InstanceId);
+
+                if (state < 0) 
+                    throw WebSocketHelpers.GetExceptionFromErrorCode(state);
+
+                switch (state)
+                {
+                    case 0:
+                        return WebSocketState.Connecting;
+                    case 1:
+                        return WebSocketState.Open;
+                    case 2:
+                        return WebSocketState.Closing;
+                    case 3:
+                        return WebSocketState.Closed;
+                    default:
+                        return WebSocketState.Closed;
+                }
+            }
+        }
+        #endregion
+
+        #region Ctor/Dtor
+        public WebSocket(string url, List<string> subprotocols, Dictionary<string, string> headers = null)
+        {
+            JsLibBridge.Initialize();
+
+            InstanceId = JsLibBridge.AddInstance(url, this);
+
+            foreach (var subprotocol in subprotocols)
+                JsLibBridge.WebSocketAddSubProtocol(InstanceId, subprotocol);
+        }
+
+        ~WebSocket()
+        {
+            JsLibBridge.RemoveInstance(InstanceId);
+        }
+        #endregion
+
+        #region Public API
+        public Task Connect()
+        {
+            var ret = WebSocketConnect(InstanceId);
+
+            if (ret < 0)
+                throw WebSocketHelpers.GetExceptionFromErrorCode(ret);
+
+            return Task.CompletedTask;
+        }
+
+        public void CancelConnection()
+        {
+            if (State == WebSocketState.Open)
+                Close(WebSocketCloseCode.Abnormal);
+        }
+
+        public Task Close(WebSocketCloseCode code = WebSocketCloseCode.Normal, string reason = null)
+        {
+            var ret = WebSocketClose(InstanceId, (int)code, reason);
+
+            if (ret < 0)
+                throw WebSocketHelpers.GetExceptionFromErrorCode(ret);
+
+            return Task.CompletedTask;
+        }
+
+        public Task Send(byte[] data)
+        {
+            var ret = WebSocketSend(InstanceId, data, data.Length);
+
+            if (ret < 0)
+                throw WebSocketHelpers.GetExceptionFromErrorCode(ret);
+
+            return Task.CompletedTask;
+        }
+
+        public Task SendText(string message)
+        {
+            var ret = WebSocketSendText(InstanceId, message);
+
+            if (ret < 0)
+                throw WebSocketHelpers.GetExceptionFromErrorCode(ret);
+
+            return Task.CompletedTask;
+        }
+        #endregion
+
+        #region JSLib Events
+        public void TriggerOnOpen()
+        {
+            OnOpen?.Invoke();
+        }
+
+        public void TriggerOnMessage(byte[] data)
+        {
+            OnMessage?.Invoke(data);
+        }
+
+        public void TriggerOnError(string errorMsg)
+        {
+            OnError?.Invoke(errorMsg);
+        }
+
+        public void TriggerOnClose(int closeCode)
+        {
+            OnClose?.Invoke(WebSocketHelpers.ConvertCloseCode(closeCode));
+        }
+        #endregion
+    }
+
+    internal static class JsLibBridge
+    {
         #region JSLib Interop
         public delegate void OpenedCallback(int instanceId);
         public delegate void MessageReceivedCallback(int instanceId, IntPtr msgPtr, int msgSize);
@@ -779,6 +772,6 @@ namespace NativeWebSocket
                 instance.TriggerOnClose(closeCode);
             }
         }
-#endif
     }
+#endif
 }
