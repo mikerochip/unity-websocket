@@ -82,7 +82,7 @@ namespace Mikerochip.WebSocket
         #endregion
 
         #region Private Fields
-        private Mikerochip.WebSocket.Internal.WebSocket _webSocket;
+        private IWebSocket _webSocket;
         private Task _connectTask;
         private readonly Queue<byte[]> _incomingMessages = new Queue<byte[]>();
         private readonly Queue<byte[]> _outgoingMessages = new Queue<byte[]>();
@@ -226,7 +226,7 @@ namespace Mikerochip.WebSocket
 
             ErrorMessage = null;
             
-            _webSocket = new Internal.WebSocket(
+            _webSocket = WebSocketHelpers.CreateWebSocket(
                 Config.Url,
                 Config.Subprotocols,
                 Config.Headers,

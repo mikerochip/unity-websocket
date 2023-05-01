@@ -107,16 +107,6 @@ namespace Mikerochip.WebSocket.Internal
         ServerError = 1011,
         TlsHandshakeFailure = 1015
     }
-
-    internal static class WebSocketHelpers
-    {
-        public static WebSocketCloseCode ConvertCloseCode(int closeCode)
-        {
-            if (Enum.IsDefined(typeof(WebSocketCloseCode), closeCode))
-                return (WebSocketCloseCode)closeCode;
-            return WebSocketCloseCode.Undefined;
-        }
-    }
     
     internal delegate void OpenedHandler();
     internal delegate void MessageReceivedHandler(byte[] data);
@@ -144,6 +134,26 @@ namespace Mikerochip.WebSocket.Internal
         Task ConnectAsync();
         Task SendAsync(byte[] bytes);
         Task CloseAsync();
+    }
+
+    internal static class WebSocketHelpers
+    {
+        public static WebSocketCloseCode ConvertCloseCode(int closeCode)
+        {
+            if (Enum.IsDefined(typeof(WebSocketCloseCode), closeCode))
+                return (WebSocketCloseCode)closeCode;
+            return WebSocketCloseCode.Undefined;
+        }
+
+        public static IWebSocket CreateWebSocket(
+            string url,
+            IEnumerable<string> subprotocols,
+            Dictionary<string, string> headers = null,
+            int maxSendBytes = 4096,
+            int maxReceiveBytes = 4096)
+        {
+            return new WebSocket(url, subprotocols, headers, maxSendBytes, maxReceiveBytes);
+        }
     }
 
 #if !UNITY_WEBGL || UNITY_EDITOR
