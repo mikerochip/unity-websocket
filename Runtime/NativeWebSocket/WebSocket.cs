@@ -89,11 +89,6 @@ internal class WaitForBackgroundThread
 
 namespace NativeWebSocket
 {
-    internal delegate void WebSocketOpenEventHandler();
-    internal delegate void WebSocketMessageEventHandler(byte[] data);
-    internal delegate void WebSocketErrorEventHandler(string errorMsg);
-    internal delegate void WebSocketCloseEventHandler(WebSocketCloseCode closeCode);
-
     // see https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent/code
     internal enum WebSocketCloseCode
     {
@@ -113,14 +108,6 @@ namespace NativeWebSocket
         TlsHandshakeFailure = 1015
     }
 
-    internal enum WebSocketState
-    {
-        Connecting,
-        Open,
-        Closing,
-        Closed
-    }
-
     internal static partial class WebSocketHelpers
     {
         public static WebSocketCloseCode ConvertCloseCode(int closeCode)
@@ -131,23 +118,36 @@ namespace NativeWebSocket
         }
     }
     
+    internal delegate void OpenedHandler();
+    internal delegate void MessageReceivedHandler(byte[] data);
+    internal delegate void ErrorHandler(string errorMsg);
+    internal delegate void ClosedHandler(WebSocketCloseCode closeCode);
+
+    internal enum WebSocketState
+    {
+        Connecting,
+        Open,
+        Closing,
+        Closed
+    }
+
     internal interface IWebSocket
     {
-        event WebSocketOpenEventHandler OnOpen;
-        event WebSocketMessageEventHandler OnMessage;
-        event WebSocketErrorEventHandler OnError;
-        event WebSocketCloseEventHandler OnClose;
+        event OpenedHandler Opened;
+        event MessageReceivedHandler MessageReceived;
+        event ErrorHandler Error;
+        event ClosedHandler Closed;
 
         WebSocketState State { get; }
     }
 
-#if false //!UNITY_WEBGL || UNITY_EDITOR
+#if !UNITY_WEBGL || UNITY_EDITOR
     internal class WebSocket : IWebSocket
     {
-        public event WebSocketOpenEventHandler OnOpen;
-        public event WebSocketMessageEventHandler OnMessage;
-        public event WebSocketErrorEventHandler OnError;
-        public event WebSocketCloseEventHandler OnClose;
+        public event OpenedHandler Opened;
+        public event MessageReceivedHandler MessageReceived;
+        public event ErrorHandler Error;
+        public event ClosedHandler Closed;
 
         private Uri uri;
         private Dictionary<string, string> headers;
@@ -248,14 +248,14 @@ namespace NativeWebSocket
                 }
 
                 await m_Socket.ConnectAsync(uri, m_CancellationToken);
-                OnOpen?.Invoke();
+                Opened?.Invoke();
 
                 await Receive();
             }
             catch (Exception ex)
             {
-                OnError?.Invoke(ex.Message);
-                OnClose?.Invoke(WebSocketCloseCode.Abnormal);
+                Error?.Invoke(ex.Message);
+                Closed?.Invoke(WebSocketCloseCode.Abnormal);
             }
             finally
             {
@@ -413,7 +413,7 @@ namespace NativeWebSocket
             var len = messageListCopy.Count;
             for (int i = 0; i < len; i++)
             {
-                OnMessage?.Invoke(messageListCopy[i]);
+                MessageReceived?.Invoke(messageListCopy[i]);
             }
         }
 
@@ -463,7 +463,7 @@ namespace NativeWebSocket
                         else if (result.MessageType == WebSocketMessageType.Close)
                         {
                             await Close();
-                            closeCode = WebSocketHelpers.ParseCloseCodeEnum((int)result.CloseStatus);
+                            closeCode = WebSocketHelpers.ConvertCloseCode((int)result.CloseStatus);
                             break;
                         }
                     }
@@ -476,7 +476,7 @@ namespace NativeWebSocket
             finally
             {
                 await new WaitForUpdate();
-                OnClose?.Invoke(closeCode);
+                Closed?.Invoke(closeCode);
             }
         }
 
@@ -545,29 +545,14 @@ namespace NativeWebSocket
 
     internal class WebSocket : IWebSocket
     {
-        #region JSLib Interop
-        [DllImport("__Internal")]
-        public static extern int WebSocketConnect(int instanceId);
-        [DllImport("__Internal")]
-        public static extern int WebSocketClose(int instanceId, int code, string reason);
-        [DllImport("__Internal")]
-        public static extern int WebSocketSend(int instanceId, byte[] dataPtr, int dataLength);
-        [DllImport("__Internal")]
-        public static extern int WebSocketSendText(int instanceId, string message);
-        [DllImport("__Internal")]
-        public static extern int WebSocketGetState(int instanceId);
-        #endregion
-
         #region IWebSocket Events
-        public event WebSocketOpenEventHandler OnOpen;
-        public event WebSocketMessageEventHandler OnMessage;
-        public event WebSocketErrorEventHandler OnError;
-        public event WebSocketCloseEventHandler OnClose;
+        public event OpenedHandler Opened;
+        public event MessageReceivedHandler MessageReceived;
+        public event ErrorHandler Error;
+        public event ClosedHandler Closed;
         #endregion
 
-        #region Public Properties
-        public int InstanceId { get; }
-
+        #region IWebSocket Properties
         public WebSocketState State
         {
             get 
@@ -592,6 +577,10 @@ namespace NativeWebSocket
                 }
             }
         }
+        #endregion
+        
+        #region Internal Properties
+        private int InstanceId { get; }
         #endregion
 
         #region Ctor/Dtor
@@ -659,22 +648,34 @@ namespace NativeWebSocket
         }
         #endregion
 
-        #region JSLib Events
-        public void TriggerOnOpen() => OnOpen?.Invoke();
-        public void TriggerOnMessageReceived(byte[] data) => OnMessage?.Invoke(data);
-        public void TriggerOnError(string errorMsg) => OnError?.Invoke(errorMsg);
-        public void TriggerOnClose(int closeCode) =>
-            OnClose?.Invoke(WebSocketHelpers.ConvertCloseCode(closeCode));
+        #region Marshalled Types
+        [DllImport("__Internal")]
+        private static extern int WebSocketConnect(int instanceId);
+        [DllImport("__Internal")]
+        private static extern int WebSocketClose(int instanceId, int code, string reason);
+        [DllImport("__Internal")]
+        private static extern int WebSocketSend(int instanceId, byte[] dataPtr, int dataLength);
+        [DllImport("__Internal")]
+        private static extern int WebSocketSendText(int instanceId, string message);
+        [DllImport("__Internal")]
+        private static extern int WebSocketGetState(int instanceId);
+        #endregion
+
+        #region JsLibBridge Event Helpers
+        public void OnOpen() => Opened?.Invoke();
+        public void OnMessage(byte[] data) => MessageReceived?.Invoke(data);
+        public void OnError(string errorMsg) => Error?.Invoke(errorMsg);
+        public void OnClose(int closeCode) => Closed?.Invoke(WebSocketHelpers.ConvertCloseCode(closeCode));
         #endregion
     }
 
     internal static class JsLibBridge
     {
-        #region JSLib Interop
-        public delegate void OpenedCallback(int instanceId);
-        public delegate void MessageReceivedCallback(int instanceId, IntPtr msgPtr, int msgSize);
+        #region Marshalled Types
+        public delegate void OpenCallback(int instanceId);
+        public delegate void MessageCallback(int instanceId, IntPtr msgPtr, int msgSize);
         public delegate void ErrorCallback(int instanceId, IntPtr errorPtr);
-        public delegate void ClosedCallback(int instanceId, int closeCode);
+        public delegate void CloseCallback(int instanceId, int closeCode);
 
         [DllImport ("__Internal")]
         public static extern int WebSocketAllocate(string url);
@@ -683,19 +684,24 @@ namespace NativeWebSocket
         [DllImport ("__Internal")]
         public static extern int WebSocketAddSubProtocol(int instanceId, string subprotocol);
         [DllImport ("__Internal")]
-        public static extern void WebSocketSetOnOpen(OpenedCallback callback);
+        public static extern void WebSocketSetOnOpen(OpenCallback callback);
         [DllImport ("__Internal")]
-        public static extern void WebSocketSetOnMessage(MessageReceivedCallback callback);
+        public static extern void WebSocketSetOnMessage(MessageCallback callback);
         [DllImport ("__Internal")]
         public static extern void WebSocketSetOnError(ErrorCallback callback);
         [DllImport ("__Internal")]
-        public static extern void WebSocketSetOnClose(ClosedCallback callback);
+        public static extern void WebSocketSetOnClose(CloseCallback callback);
         #endregion
 
+        #region External Properties
         public static bool IsInitialized { get; private set; }
+        #endregion
 
-        private static Dictionary<Int32, WebSocket> Instances { get; } = new Dictionary<Int32, WebSocket> ();
+        #region Internal Properties
+        private static Dictionary<int, WebSocket> Instances { get; } = new Dictionary<int, WebSocket> ();
+        #endregion
         
+        #region External Methods
         public static void Initialize()
         {
             if (IsInitialized)
@@ -703,16 +709,16 @@ namespace NativeWebSocket
             
             IsInitialized = true;
             
-            WebSocketSetOnOpen(OnOpened);
-            WebSocketSetOnMessage(OnMessageReceived);
+            WebSocketSetOnOpen(OnOpen);
+            WebSocketSetOnMessage(OnMessage);
             WebSocketSetOnError(OnError);
-            WebSocketSetOnClose(OnClosed);
+            WebSocketSetOnClose(OnClose);
         }
 
-        public static int AddInstance(string url, WebSocket webSocket)
+        public static int AddInstance(string url, WebSocket instance)
         {
             var instanceId = WebSocketAllocate(url);
-            Instances.Add(instanceId, webSocket);
+            Instances.Add(instanceId, instance);
             return instanceId;
         }
 
@@ -721,43 +727,46 @@ namespace NativeWebSocket
             Instances.Remove(instanceId);
             WebSocketFree(instanceId);
         }
+        #endregion
 
-        [MonoPInvokeCallback(typeof(OpenedCallback))]
-        public static void OnOpened(int instanceId)
+        #region Marshalled Callbacks
+        [MonoPInvokeCallback(typeof(OpenCallback))]
+        private static void OnOpen(int instanceId)
         {
             if (Instances.TryGetValue(instanceId, out var instance))
-                instance.TriggerOnOpen();
+                instance.OnOpen();
         }
 
-        [MonoPInvokeCallback(typeof(MessageReceivedCallback))]
-        public static void OnMessageReceived(int instanceId, IntPtr msgPtr, int msgSize)
+        [MonoPInvokeCallback(typeof(MessageCallback))]
+        private static void OnMessage(int instanceId, IntPtr msgPtr, int msgSize)
         {
             if (Instances.TryGetValue(instanceId, out var instance))
             {
                 var msg = new byte[msgSize];
                 Marshal.Copy(msgPtr, msg, 0, msgSize);
 
-                instance.TriggerOnMessageReceived(msg);
+                instance.OnMessage(msg);
             }
         }
 
         [MonoPInvokeCallback(typeof(ErrorCallback))]
-        public static void OnError(int instanceId, IntPtr errorPtr)
+        private static void OnError(int instanceId, IntPtr errorPtr)
         {
             if (Instances.TryGetValue(instanceId, out var instance))
             {
                 var errorMsg = Marshal.PtrToStringAuto(errorPtr);
-                instance.TriggerOnError(errorMsg);
+                instance.OnError(errorMsg);
             }
         }
 
-        [MonoPInvokeCallback(typeof(ClosedCallback))]
-        public static void OnClosed(int instanceId, int closeCode)
+        [MonoPInvokeCallback(typeof(CloseCallback))]
+        private static void OnClose(int instanceId, int closeCode)
         {
-            if (Instances.TryGetValue (instanceId, out var instance)) {
-                instance.TriggerOnClose(closeCode);
+            if (Instances.TryGetValue(instanceId, out var instance)) {
+                instance.OnClose(closeCode);
             }
         }
+        #endregion
     }
 #endif
 }

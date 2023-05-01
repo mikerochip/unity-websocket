@@ -221,10 +221,10 @@ namespace Mikerochip.WebSocket
             ErrorMessage = null;
             
             _webSocket = new NativeWebSocket.WebSocket(Config.Url, Config.Subprotocols, Config.Headers);
-            _webSocket.OnOpen += WebSocketOnOpen;
-            _webSocket.OnMessage += WebSocketOnMessage;
-            _webSocket.OnClose += WebSocketOnClose;
-            _webSocket.OnError += WebSocketOnError;
+            _webSocket.Opened += WebSocketOnOpen;
+            _webSocket.MessageReceived += WebSocketOnMessage;
+            _webSocket.Closed += WebSocketOnClose;
+            _webSocket.Error += WebSocketOnError;
         }
 
         private async Task ShutdownWebSocketAsync()
@@ -239,10 +239,10 @@ namespace Mikerochip.WebSocket
             _incomingMessages.Clear();
             _outgoingMessages.Clear();
             
-            _webSocket.OnOpen -= WebSocketOnOpen;
-            _webSocket.OnMessage -= WebSocketOnMessage;
-            _webSocket.OnClose -= WebSocketOnClose;
-            _webSocket.OnError -= WebSocketOnError;
+            _webSocket.Opened -= WebSocketOnOpen;
+            _webSocket.MessageReceived -= WebSocketOnMessage;
+            _webSocket.Closed -= WebSocketOnClose;
+            _webSocket.Error -= WebSocketOnError;
             _webSocket = null;
         }
 
