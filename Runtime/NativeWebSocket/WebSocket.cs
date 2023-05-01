@@ -469,6 +469,7 @@ namespace NativeWebSocket
                 if (state < 0) 
                     Error?.Invoke(ErrorCodeToMessage(state));
 
+                // see https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/readyState
                 switch (state)
                 {
                     case 0:
