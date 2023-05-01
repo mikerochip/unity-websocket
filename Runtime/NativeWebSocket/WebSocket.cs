@@ -536,6 +536,11 @@ namespace NativeWebSocket
         #region Ctor/Dtor
         public WebSocket(string url, List<string> subprotocols, Dictionary<string, string> headers = null)
         {
+            var uri = new Uri(url);
+            var protocol = uri.Scheme;
+            if (!protocol.Equals("ws") && !protocol.Equals("wss"))
+                throw new ArgumentException("Unsupported protocol: " + protocol);
+
             JsLibBridge.Initialize();
 
             _instanceId = JsLibBridge.AddInstance(url, this);
