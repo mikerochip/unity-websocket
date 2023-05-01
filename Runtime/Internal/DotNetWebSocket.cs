@@ -88,13 +88,6 @@ namespace Mikerochip.WebSocket.Internal
 {
     internal class DotNetWebSocket : IWebSocket
     {
-        #region IWebSocket Events
-        public event OpenedHandler Opened;
-        public event MessageReceivedHandler MessageReceived;
-        public event ErrorHandler Error;
-        public event ClosedHandler Closed;
-        #endregion
-
         #region Private Fields
         private readonly Uri _uri;
         private readonly List<string> _subprotocols;
@@ -109,6 +102,13 @@ namespace Mikerochip.WebSocket.Internal
         private bool isSending = false;
         private readonly Queue<byte[]> _incomingMessages = new Queue<byte[]>();
         private readonly Queue<ArraySegment<byte>> _outgoingMessages = new Queue<ArraySegment<byte>>();
+        #endregion
+
+        #region IWebSocket Events
+        public event OpenedHandler Opened;
+        public event MessageReceivedHandler MessageReceived;
+        public event ErrorHandler Error;
+        public event ClosedHandler Closed;
         #endregion
 
         #region IWebSocket Properties

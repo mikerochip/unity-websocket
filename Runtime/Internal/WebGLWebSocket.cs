@@ -8,6 +8,15 @@ namespace Mikerochip.WebSocket.Internal
 {
     internal class WebGLWebSocket : IWebSocket
     {
+        #region Private Fields
+        private readonly int _maxSendBytes;
+        private readonly int _maxReceiveBytes;
+        private readonly int _instanceId;
+        // incoming message buffering isn't strictly necessary, it's for API consistency with
+        // the System.Net.WebSockets path
+        private readonly Queue<byte[]> _incomingMessages = new Queue<byte[]>();
+        #endregion
+
         #region IWebSocket Events
         public event OpenedHandler Opened;
         public event MessageReceivedHandler MessageReceived;
@@ -43,15 +52,6 @@ namespace Mikerochip.WebSocket.Internal
         }
         #endregion
         
-        #region Private Fields
-        private readonly int _maxSendBytes;
-        private readonly int _maxReceiveBytes;
-        private readonly int _instanceId;
-        // incoming message buffering isn't strictly necessary, it's for API consistency with
-        // the System.Net.WebSockets path
-        private readonly Queue<byte[]> _incomingMessages = new Queue<byte[]>();
-        #endregion
-
         #region Ctor/Dtor
         public WebGLWebSocket(
             string url,
