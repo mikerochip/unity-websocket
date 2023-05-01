@@ -287,30 +287,6 @@ var LibraryWebSocket = {
 	},
 
 	/**
-	 * Send text message over WebSocket
-	 *
-	 * @param instanceId Instance ID
-	 * @param bufferPtr Pointer to the message buffer
-	 * @param length Length of the message in the buffer
-	 */
-	WebSocketSendText: function(instanceId, message) {
-
-		var instance = webSocketState.instances[instanceId];
-		if (!instance) return -1;
-
-		if (!instance.ws)
-			return -3;
-
-		if (instance.ws.readyState !== 1)
-			return -6;
-
-		instance.ws.send(UTF8ToString(message));
-
-		return 0;
-
-	},
-
-	/**
 	 * Return WebSocket readyState
 	 *
 	 * @param instanceId Instance ID
