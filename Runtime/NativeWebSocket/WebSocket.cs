@@ -660,25 +660,11 @@ namespace NativeWebSocket
         #endregion
 
         #region JSLib Events
-        public void TriggerOnOpen()
-        {
-            OnOpen?.Invoke();
-        }
-
-        public void TriggerOnMessage(byte[] data)
-        {
-            OnMessage?.Invoke(data);
-        }
-
-        public void TriggerOnError(string errorMsg)
-        {
-            OnError?.Invoke(errorMsg);
-        }
-
-        public void TriggerOnClose(int closeCode)
-        {
+        public void TriggerOnOpen() => OnOpen?.Invoke();
+        public void TriggerOnMessageReceived(byte[] data) => OnMessage?.Invoke(data);
+        public void TriggerOnError(string errorMsg) => OnError?.Invoke(errorMsg);
+        public void TriggerOnClose(int closeCode) =>
             OnClose?.Invoke(WebSocketHelpers.ConvertCloseCode(closeCode));
-        }
         #endregion
     }
 
@@ -699,7 +685,7 @@ namespace NativeWebSocket
         [DllImport ("__Internal")]
         public static extern void WebSocketSetOnOpen(OpenedCallback callback);
         [DllImport ("__Internal")]
-        public static extern void WebSocketSetOnMessage(MessageReceivedCallback receivedCallback);
+        public static extern void WebSocketSetOnMessage(MessageReceivedCallback callback);
         [DllImport ("__Internal")]
         public static extern void WebSocketSetOnError(ErrorCallback callback);
         [DllImport ("__Internal")]
@@ -751,7 +737,7 @@ namespace NativeWebSocket
                 var msg = new byte[msgSize];
                 Marshal.Copy(msgPtr, msg, 0, msgSize);
 
-                instance.TriggerOnMessage(msg);
+                instance.TriggerOnMessageReceived(msg);
             }
         }
 
