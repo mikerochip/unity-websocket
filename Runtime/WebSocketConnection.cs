@@ -170,17 +170,14 @@ namespace Mikerochip.WebSocket
                     
                     State = WebSocketState.Connecting;
                     InitializeWebSocket();
-                    _connectTask = _webSocket.Connect();
+                    _connectTask = _webSocket.ConnectAsync();
                 }
                 else if (DesiredState == WebSocketDesiredState.Disconnect)
                 {
                     DesiredState = WebSocketDesiredState.None;
 
                     if (_webSocket != null)
-                    {
-                        _webSocket.CancelConnection();
-                        await _webSocket.Close();
-                    }
+                        await _webSocket.CloseAsync();
                 }
 
                 await Task.Yield();
@@ -202,7 +199,7 @@ namespace Mikerochip.WebSocket
         {
             while (true)
             {
-                _webSocket?.ProcessIncomingMessages();
+                _webSocket?.ProcessReceivedMessages();
                 await Task.Yield();
             }
         }
@@ -214,7 +211,7 @@ namespace Mikerochip.WebSocket
                 while (_webSocket?.State == NativeWebSocket.WebSocketState.Open &&
                        _outgoingMessages.TryDequeue(out var bytes))
                 {
-                    await _webSocket.Send(bytes);
+                    await _webSocket.SendAsync(bytes);
                 }
 
                 await Task.Yield();
@@ -241,7 +238,7 @@ namespace Mikerochip.WebSocket
             if (_webSocket == null)
                 return;
             
-            _webSocket.CancelConnection();
+            await _webSocket.CloseAsync();
             await _connectTask;
             _connectTask = null;
             

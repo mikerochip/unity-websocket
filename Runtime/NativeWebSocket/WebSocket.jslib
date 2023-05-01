@@ -187,7 +187,7 @@ var LibraryWebSocket = {
 					_free(buffer);
 				}
 
-      }
+			}
 
 		};
 

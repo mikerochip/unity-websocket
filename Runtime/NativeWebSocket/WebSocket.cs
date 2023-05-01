@@ -113,7 +113,7 @@ namespace NativeWebSocket
         public static WebSocketCloseCode ConvertCloseCode(int closeCode)
         {
             if (Enum.IsDefined(typeof(WebSocketCloseCode), closeCode))
-                return (WebSocketCloseCode) closeCode;
+                return (WebSocketCloseCode)closeCode;
             return WebSocketCloseCode.Undefined;
         }
     }
@@ -140,7 +140,10 @@ namespace NativeWebSocket
 
         WebSocketState State { get; }
 
-        void ProcessIncomingMessages();
+        void ProcessReceivedMessages();
+        Task ConnectAsync();
+        Task SendAsync(byte[] bytes);
+        Task CloseAsync();
     }
 
 #if !UNITY_WEBGL || UNITY_EDITOR
@@ -212,12 +215,23 @@ namespace NativeWebSocket
         #endregion
 
         #region IWebSocket Methods
-        public void CancelConnection()
+        public void ProcessReceivedMessages()
         {
-            _cancellationTokenSource?.Cancel();
+            if (_incomingMessages.Count == 0)
+                return;
+
+            List<byte[]> messages;
+            lock (_incomingMessages)
+            {
+                messages = new List<byte[]>(_incomingMessages);
+                _incomingMessages.Clear();
+            }
+
+            foreach (var message in messages)
+                MessageReceived?.Invoke(message);
         }
 
-        public async Task Connect()
+        public async Task ConnectAsync()
         {
             try
             {
@@ -238,7 +252,7 @@ namespace NativeWebSocket
                 await _socket.ConnectAsync(_uri, _cancellationToken);
                 Opened?.Invoke();
 
-                await Receive();
+                await ReceiveAsync();
             }
             catch (Exception ex)
             {
@@ -255,7 +269,7 @@ namespace NativeWebSocket
             }
         }
 
-        public Task Send(byte[] bytes)
+        public Task SendAsync(byte[] bytes)
         {
             if (bytes.Length == 0)
                 return Task.CompletedTask;
@@ -263,21 +277,33 @@ namespace NativeWebSocket
             return SendMessage(new ArraySegment<byte>(bytes));
         }
 
+        public Task CloseAsync()
+        {
+            switch (State)
+            {
+                case WebSocketState.Closed:
+                case WebSocketState.Closing:
+                    break;
+                
+                default:
+                    _cancellationTokenSource.Cancel();
+                    break;
+            }
+            return Task.CompletedTask;
+        }
+
         private async Task SendMessage(ArraySegment<byte> buffer)
         {
-            // The state of the connection is contained in the context Items dictionary.
             bool sending;
-
             lock (_outgoingMessages)
             {
                 sending = isSending;
-
-                // If not, we are now.
                 if (!isSending)
-                {
                     isSending = true;
-                }
             }
+
+            if (_cancellationToken.IsCancellationRequested)
+                return;
 
             if (!sending)
             {
@@ -300,18 +326,16 @@ namespace NativeWebSocket
                     Monitor.Exit(_socket);
                 }
 
-                // Note that we've finished sending.
                 lock (_outgoingMessages)
-                {
                     isSending = false;
-                }
 
-                // Handle any queued messages.
+                if (_cancellationToken.IsCancellationRequested)
+                    return;
+
                 await HandleQueue();
             }
             else
             {
-                // Add the message to the queue.
                 lock (_outgoingMessages)
                 {
                     _outgoingMessages.Enqueue(buffer);
@@ -335,25 +359,9 @@ namespace NativeWebSocket
             await SendMessage(buffer);
         }
 
-        public void ProcessIncomingMessages()
+        private async Task ReceiveAsync()
         {
-            if (_incomingMessages.Count == 0)
-                return;
-
-            List<byte[]> messages;
-            lock (_incomingMessages)
-            {
-                messages = new List<byte[]>(_incomingMessages);
-                _incomingMessages.Clear();
-            }
-
-            foreach (var message in messages)
-                MessageReceived?.Invoke(message);
-        }
-
-        public async Task Receive()
-        {
-            WebSocketCloseCode closeCode = WebSocketCloseCode.Abnormal;
+            WebSocketCloseCode closeCode = WebSocketCloseCode.Normal;
             await new WaitForBackgroundThread();
 
             ArraySegment<byte> buffer = new ArraySegment<byte>(new byte[8192]);
@@ -367,13 +375,15 @@ namespace NativeWebSocket
                         do
                         {
                             result = await _socket.ReceiveAsync(buffer, _cancellationToken);
+                            if (_cancellationToken.IsCancellationRequested)
+                                break;
                             ms.Write(buffer.Array, buffer.Offset, result.Count);
                         }
                         while (!result.EndOfMessage);
 
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
-                            await Close();
+                            await CloseAsync();
                             closeCode = WebSocketHelpers.ConvertCloseCode((int)result.CloseStatus);
                             break;
                         }
@@ -389,19 +399,12 @@ namespace NativeWebSocket
             catch (Exception)
             {
                 _cancellationTokenSource.Cancel();
+                closeCode = WebSocketCloseCode.Abnormal;
             }
             finally
             {
                 await new WaitForUpdate();
                 Closed?.Invoke(closeCode);
-            }
-        }
-
-        public async Task Close()
-        {
-            if (State == WebSocketState.Open)
-            {
-                await _socket.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, _cancellationToken);
             }
         }
     }
@@ -483,7 +486,7 @@ namespace NativeWebSocket
                 MessageReceived?.Invoke(message);
         }
         
-        public Task Connect()
+        public Task ConnectAsync()
         {
             var ret = WebSocketConnect(_instanceId);
 
@@ -493,15 +496,9 @@ namespace NativeWebSocket
             return Task.CompletedTask;
         }
 
-        public void CancelConnection()
+        public Task SendAsync(byte[] bytes)
         {
-            if (State == WebSocketState.Open)
-                Close(WebSocketCloseCode.Abnormal);
-        }
-
-        public Task Close(WebSocketCloseCode code = WebSocketCloseCode.Normal, string reason = null)
-        {
-            var ret = WebSocketClose(_instanceId, (int)code, reason);
+            var ret = WebSocketSend(_instanceId, bytes, bytes.Length);
 
             if (ret < 0)
                 Error?.Invoke(ErrorCodeToMessage(ret));
@@ -509,9 +506,16 @@ namespace NativeWebSocket
             return Task.CompletedTask;
         }
 
-        public Task Send(byte[] data)
+        public Task CloseAsync()
         {
-            var ret = WebSocketSend(_instanceId, data, data.Length);
+            switch (State)
+            {
+                case WebSocketState.Closed:
+                case WebSocketState.Closing:
+                    return Task.CompletedTask;
+            }
+
+            var ret = WebSocketClose(_instanceId, (int)WebSocketCloseCode.Normal, null);
 
             if (ret < 0)
                 Error?.Invoke(ErrorCodeToMessage(ret));
