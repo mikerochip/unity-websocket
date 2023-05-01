@@ -108,7 +108,7 @@ namespace NativeWebSocket
         TlsHandshakeFailure = 1015
     }
 
-    internal static partial class WebSocketHelpers
+    internal static class WebSocketHelpers
     {
         public static WebSocketCloseCode ConvertCloseCode(int closeCode)
         {
@@ -489,60 +489,6 @@ namespace NativeWebSocket
         }
     }
 #else
-    internal static partial class WebSocketHelpers
-    {
-        public static WebSocketException GetExceptionFromErrorCode(int errorCode)
-        {
-            switch (errorCode)
-            {
-                case -1:
-                    return new WebSocketUnexpectedException("WebSocket instance not found.");
-                case -2:
-                    return new WebSocketInvalidStateException("WebSocket is already connected or in connecting state.");
-                case -3:
-                    return new WebSocketInvalidStateException("WebSocket is not connected.");
-                case -4:
-                    return new WebSocketInvalidStateException("WebSocket is already closing.");
-                case -5:
-                    return new WebSocketInvalidStateException("WebSocket is already closed.");
-                case -6:
-                    return new WebSocketInvalidStateException("WebSocket is not in open state.");
-                case -7:
-                    return new WebSocketInvalidArgumentException("Cannot close WebSocket. An invalid code was specified or reason is too long.");
-                default:
-                    return new WebSocketUnexpectedException("Unknown error.");
-            }
-        }
-
-        public class WebSocketException : Exception
-        {
-            public WebSocketException(string message) : base(message)
-            {
-            }
-        }
-
-        public class WebSocketUnexpectedException : WebSocketException
-        {
-            public WebSocketUnexpectedException(string message) : base(message)
-            {
-            }
-        }
-
-        public class WebSocketInvalidArgumentException : WebSocketException
-        {
-            public WebSocketInvalidArgumentException(string message) : base(message)
-            {
-            }
-        }
-
-        public class WebSocketInvalidStateException : WebSocketException
-        {
-            public WebSocketInvalidStateException(string message) : base(message)
-            {
-            }
-        }
-    }
-
     internal class WebSocket : IWebSocket
     {
         #region IWebSocket Events
@@ -557,10 +503,10 @@ namespace NativeWebSocket
         {
             get 
             {
-                var state = WebSocketGetState(InstanceId);
+                var state = WebSocketGetState(_instanceId);
 
                 if (state < 0) 
-                    throw WebSocketHelpers.GetExceptionFromErrorCode(state);
+                    Error?.Invoke(ErrorCodeToMessage(state));
 
                 switch (state)
                 {
@@ -606,7 +552,7 @@ namespace NativeWebSocket
             var ret = WebSocketConnect(InstanceId);
 
             if (ret < 0)
-                throw WebSocketHelpers.GetExceptionFromErrorCode(ret);
+                Error?.Invoke(ErrorCodeToMessage(ret));
 
             return Task.CompletedTask;
         }
@@ -622,17 +568,17 @@ namespace NativeWebSocket
             var ret = WebSocketClose(InstanceId, (int)code, reason);
 
             if (ret < 0)
-                throw WebSocketHelpers.GetExceptionFromErrorCode(ret);
+                Error?.Invoke(ErrorCodeToMessage(ret));
 
             return Task.CompletedTask;
         }
 
         public Task Send(byte[] data)
         {
-            var ret = WebSocketSend(InstanceId, data, data.Length);
+            var ret = WebSocketSend(_instanceId, data, data.Length);
 
             if (ret < 0)
-                throw WebSocketHelpers.GetExceptionFromErrorCode(ret);
+                Error?.Invoke(ErrorCodeToMessage(ret));
 
             return Task.CompletedTask;
         }
@@ -642,9 +588,34 @@ namespace NativeWebSocket
             var ret = WebSocketSendText(InstanceId, message);
 
             if (ret < 0)
-                throw WebSocketHelpers.GetExceptionFromErrorCode(ret);
+                Error?.Invoke(ErrorCodeToMessage(ret));
 
             return Task.CompletedTask;
+        }
+        #endregion
+
+        #region Internal Methods
+        private static string ErrorCodeToMessage(int errorCode)
+        {
+            switch (errorCode)
+            {
+                case -1:
+                    return "WebSocket instance not found.";
+                case -2:
+                    return "WebSocket is already connected or in connecting state.";
+                case -3:
+                    return "WebSocket is not connected.";
+                case -4:
+                    return "WebSocket is already closing.";
+                case -5:
+                    return "WebSocket is already closed.";
+                case -6:
+                    return "WebSocket is not in open state.";
+                case -7:
+                    return "Cannot close WebSocket. An invalid code was specified or reason is too long.";
+                default:
+                    return "Unknown error.";
+            }
         }
         #endregion
 
