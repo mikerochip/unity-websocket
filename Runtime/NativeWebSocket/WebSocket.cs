@@ -202,16 +202,11 @@ namespace NativeWebSocket
         {
             _uri = new Uri(url);
 
-            if (headers == null)
-            {
-                this._headers = new Dictionary<string, string>();
-            }
-            else
-            {
-                this._headers = headers;
-            }
+            _headers = headers == null
+                ? new Dictionary<string, string>()
+                : headers.ToDictionary(pair => pair.Key, pair => pair.Value);
 
-            this._subprotocols = subprotocols.ToList();
+            _subprotocols = subprotocols.ToList();
 
             string protocol = _uri.Scheme;
             if (!protocol.Equals("ws") && !protocol.Equals("wss"))
