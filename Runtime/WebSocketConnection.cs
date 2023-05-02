@@ -59,14 +59,11 @@ namespace Mikerochip.WebSocket
         public string Url => Config?.Url;
         public WebSocketConfig Config { get; private set; }
         public WebSocketState State { get; private set; }
-        
         public bool IsConnecting => DesiredState == WebSocketDesiredState.Connect || State == WebSocketState.Connecting;
         public bool IsDisconnecting => DesiredState == WebSocketDesiredState.Disconnect || State == WebSocketState.Disconnecting;
-        
         public string ErrorMessage { get; private set; }
         public byte[] LastIncomingMessageBytes => _incomingMessages.LastOrDefault();
         public string LastIncomingMessageString => BytesToString(LastIncomingMessageBytes);
-        
         // You probably don't need these and should use the methods instead. These are only here
         // if you really want to manipulate the message Queues directly, for some reason.
         public IEnumerable<byte[]> IncomingMessages => _incomingMessages;
@@ -77,7 +74,7 @@ namespace Mikerochip.WebSocket
         #region Public Events
         public event Action<WebSocketConnection> Connected;
         public event Action<WebSocketConnection> Disconnected;
-        // check LastIncomingMessage* to know what was received
+        // see LastIncomingMessage* to know what was received
         public event Action<WebSocketConnection> MessageReceived;
         #endregion
 
@@ -232,10 +229,10 @@ namespace Mikerochip.WebSocket
                 Config.Headers,
                 Config.MaxSendBytes,
                 Config.MaxReceiveBytes);
-            _webSocket.Opened += WebSocketOnOpen;
-            _webSocket.MessageReceived += WebSocketOnMessage;
-            _webSocket.Closed += WebSocketOnClose;
-            _webSocket.Error += WebSocketOnError;
+            _webSocket.Opened += OnOpened;
+            _webSocket.MessageReceived += OnMessageReceived;
+            _webSocket.Closed += OnClosed;
+            _webSocket.Error += OnError;
         }
 
         private async Task ShutdownWebSocketAsync()
@@ -250,10 +247,10 @@ namespace Mikerochip.WebSocket
             _incomingMessages.Clear();
             _outgoingMessages.Clear();
             
-            _webSocket.Opened -= WebSocketOnOpen;
-            _webSocket.MessageReceived -= WebSocketOnMessage;
-            _webSocket.Closed -= WebSocketOnClose;
-            _webSocket.Error -= WebSocketOnError;
+            _webSocket.Opened -= OnOpened;
+            _webSocket.MessageReceived -= OnMessageReceived;
+            _webSocket.Closed -= OnClosed;
+            _webSocket.Error -= OnError;
             _webSocket = null;
         }
 
@@ -272,27 +269,27 @@ namespace Mikerochip.WebSocket
             };
         }
 
-        private void WebSocketOnOpen()
+        private void OnOpened()
         {
             State = WebSocketState.Connected;
             Connected?.Invoke(this);
         }
 
-        private void WebSocketOnMessage(byte[] data)
+        private void OnMessageReceived(byte[] data)
         {
             _incomingMessages.Enqueue(data);
             MessageReceived?.Invoke(this);
         }
 
-        private void WebSocketOnClose(WebSocketCloseCode closeCode)
+        private void OnClosed(WebSocketCloseCode closeCode)
         {
             State = WebSocketState.Disconnecting;
         }
 
-        private void WebSocketOnError(string errorMsg)
+        private void OnError(string errorMessage)
         {
             State = WebSocketState.Disconnecting;
-            ErrorMessage = errorMsg;
+            ErrorMessage = errorMessage;
         }
         #endregion
     }

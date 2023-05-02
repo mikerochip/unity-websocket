@@ -21,7 +21,7 @@ namespace Mikerochip.WebSocket.Internal
     
     internal delegate void OpenedHandler();
     internal delegate void MessageReceivedHandler(byte[] data);
-    internal delegate void ErrorHandler(string errorMsg);
+    internal delegate void ErrorHandler(string errorMessage);
     internal delegate void ClosedHandler(WebSocketCloseCode closeCode);
 
     internal enum WebSocketState
