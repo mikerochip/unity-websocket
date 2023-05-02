@@ -1,4 +1,4 @@
-# Mikerochip's Unity WebSocket
+# WebSocket Client for Unity
 
 Easy-to-use, flexible WebSocket client as a MonoBehaviour called `WebSocketConnection`
 
