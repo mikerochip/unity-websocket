@@ -9,81 +9,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
-internal class MainThreadUtil : MonoBehaviour
-{
-    public static MainThreadUtil Instance { get; private set; }
-    public static SynchronizationContext synchronizationContext { get; private set; }
-
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-    public static void Setup()
-    {
-        Instance = new GameObject("MainThreadUtil")
-            .AddComponent<MainThreadUtil>();
-        synchronizationContext = SynchronizationContext.Current;
-    }
-
-    public static void Run(IEnumerator waitForUpdate)
-    {
-        synchronizationContext.Post(_ => Instance.StartCoroutine(
-            waitForUpdate), null);
-    }
-
-    void Awake()
-    {
-        gameObject.hideFlags = HideFlags.HideAndDontSave;
-        DontDestroyOnLoad(gameObject);
-    }
-}
-
-internal class WaitForUpdate : CustomYieldInstruction
-{
-    public override bool keepWaiting
-    {
-        get { return false; }
-    }
-
-    public MainThreadAwaiter GetAwaiter()
-    {
-        var awaiter = new MainThreadAwaiter();
-        MainThreadUtil.Run(CoroutineWrapper(this, awaiter));
-        return awaiter;
-    }
-
-    public class MainThreadAwaiter : INotifyCompletion
-    {
-        Action continuation;
-
-        public bool IsCompleted { get; set; }
-
-        public void GetResult() { }
-
-        public void Complete()
-        {
-            IsCompleted = true;
-            continuation?.Invoke();
-        }
-
-        void INotifyCompletion.OnCompleted(Action continuation)
-        {
-            this.continuation = continuation;
-        }
-    }
-
-    public static IEnumerator CoroutineWrapper(IEnumerator theWorker, MainThreadAwaiter awaiter)
-    {
-        yield return theWorker;
-        awaiter.Complete();
-    }
-}
-
-internal class WaitForBackgroundThread
-{
-    public ConfiguredTaskAwaitable.ConfiguredTaskAwaiter GetAwaiter()
-    {
-        return Task.Run(() => { }).ConfigureAwait(false).GetAwaiter();
-    }
-}
-
 namespace Mikerochip.WebSocket.Internal
 {
     internal class DotNetWebSocket : IWebSocket
@@ -305,5 +230,80 @@ namespace Mikerochip.WebSocket.Internal
             }
         }
         #endregion
+    }
+    
+    internal class MainThreadUtil : MonoBehaviour
+    {
+        public static MainThreadUtil Instance { get; private set; }
+        public static SynchronizationContext synchronizationContext { get; private set; }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        public static void Setup()
+        {
+            Instance = new GameObject("MainThreadUtil")
+                .AddComponent<MainThreadUtil>();
+            synchronizationContext = SynchronizationContext.Current;
+        }
+
+        public static void Run(IEnumerator waitForUpdate)
+        {
+            synchronizationContext.Post(_ => Instance.StartCoroutine(
+                waitForUpdate), null);
+        }
+
+        void Awake()
+        {
+            gameObject.hideFlags = HideFlags.HideAndDontSave;
+            DontDestroyOnLoad(gameObject);
+        }
+    }
+
+    internal class WaitForUpdate : CustomYieldInstruction
+    {
+        public override bool keepWaiting
+        {
+            get { return false; }
+        }
+
+        public MainThreadAwaiter GetAwaiter()
+        {
+            var awaiter = new MainThreadAwaiter();
+            MainThreadUtil.Run(CoroutineWrapper(this, awaiter));
+            return awaiter;
+        }
+
+        public class MainThreadAwaiter : INotifyCompletion
+        {
+            Action continuation;
+
+            public bool IsCompleted { get; set; }
+
+            public void GetResult() { }
+
+            public void Complete()
+            {
+                IsCompleted = true;
+                continuation?.Invoke();
+            }
+
+            void INotifyCompletion.OnCompleted(Action continuation)
+            {
+                this.continuation = continuation;
+            }
+        }
+
+        public static IEnumerator CoroutineWrapper(IEnumerator theWorker, MainThreadAwaiter awaiter)
+        {
+            yield return theWorker;
+            awaiter.Complete();
+        }
+    }
+
+    internal class WaitForBackgroundThread
+    {
+        public ConfiguredTaskAwaitable.ConfiguredTaskAwaiter GetAwaiter()
+        {
+            return Task.Run(() => { }).ConfigureAwait(false).GetAwaiter();
+        }
     }
 }
