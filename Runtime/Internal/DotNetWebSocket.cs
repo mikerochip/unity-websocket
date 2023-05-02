@@ -225,7 +225,7 @@ namespace Mikerochip.WebSocket.Internal
             }
             finally
             {
-                await new WaitForUpdate();
+                await new WaitForMainThread();
                 Closed?.Invoke(closeCode);
             }
         }
@@ -258,7 +258,7 @@ namespace Mikerochip.WebSocket.Internal
         }
     }
 
-    internal class WaitForUpdate : CustomYieldInstruction
+    internal class WaitForMainThread : CustomYieldInstruction
     {
         public override bool keepWaiting
         {
@@ -303,7 +303,7 @@ namespace Mikerochip.WebSocket.Internal
     {
         public ConfiguredTaskAwaitable.ConfiguredTaskAwaiter GetAwaiter()
         {
-            return Task.Run(() => { }).ConfigureAwait(false).GetAwaiter();
+            return Task.Run(() => {}).ConfigureAwait(false).GetAwaiter();
         }
     }
 }
