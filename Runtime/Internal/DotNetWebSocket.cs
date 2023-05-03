@@ -190,40 +190,49 @@ namespace Mikerochip.WebSocket.Internal
                             result = await _socket.ReceiveAsync(buffer, _cancellationToken);
                             
                             bytes += result.Count;
-                            if (bytes >= _maxReceiveBytes)
+                            if (bytes > _maxReceiveBytes)
                             {
                                 Error?.Invoke($"Received {bytes} bytes (max {_maxReceiveBytes}");
-                                while (!result.EndOfMessage)
+                                while (!result.EndOfMessage && !_cancellationToken.IsCancellationRequested)
                                     result = await _socket.ReceiveAsync(buffer, _cancellationToken);
                                 break;
                             }
 
-                            if (result.CloseStatus != null)
-                                break;
-                            
                             if (_cancellationToken.IsCancellationRequested)
+                                break;
+                            if (result.CloseStatus != null)
                                 break;
                             
                             ms.Write(buffer.Array, buffer.Offset, result.Count);
                         }
                         while (!result.EndOfMessage);
 
-                        if (result.CloseStatus != null && !_cancellationToken.IsCancellationRequested)
+                        if (_cancellationToken.IsCancellationRequested)
                         {
+                            await _socket.CloseAsync(
+                                WebSocketCloseStatus.NormalClosure,
+                                string.Empty,
+                                CancellationToken.None);
+                            break;
+                        }
+                        if (result.CloseStatus != null)
+                        {
+                            closeCode = WebSocketHelpers.ConvertCloseCode((int)result.CloseStatus);
                             await _socket.CloseAsync(
                                 result.CloseStatus.Value,
                                 result.CloseStatusDescription,
-                                _cancellationToken);
-                            closeCode = WebSocketHelpers.ConvertCloseCode((int)result.CloseStatus);
+                                CancellationToken.None);
                             break;
                         }
-                        
-                        if (_cancellationToken.IsCancellationRequested)
-                            break;
-                            
-                        ms.Seek(0, SeekOrigin.Begin);
+
+                        if (bytes > _maxReceiveBytes)
+                            continue;
+
                         lock (_incomingMessages)
+                        {
+                            ms.Seek(0, SeekOrigin.Begin);
                             _incomingMessages.Enqueue(ms.ToArray());
+                        }
                     }
                 }
             }
@@ -234,7 +243,8 @@ namespace Mikerochip.WebSocket.Internal
             }
             finally
             {
-                // make sure events are always invoked on main thread
+                // events should always be invoked on main thread so listeners don't need to
+                // be trapped in a background thread
                 await new WaitForMainThreadUpdate();
                 Closed?.Invoke(closeCode);
             }
