@@ -188,8 +188,6 @@ namespace Mikerochip.WebSocket.Internal
                         do
                         {
                             result = await _socket.ReceiveAsync(buffer, _cancellationToken);
-                            if (_cancellationToken.IsCancellationRequested)
-                                break;
                             
                             bytes += result.Count;
                             if (bytes >= _maxReceiveBytes)
@@ -197,25 +195,35 @@ namespace Mikerochip.WebSocket.Internal
                                 Error?.Invoke($"Received {bytes} bytes (max {_maxReceiveBytes}");
                                 while (!result.EndOfMessage)
                                     result = await _socket.ReceiveAsync(buffer, _cancellationToken);
-                                continue;
+                                break;
                             }
+
+                            if (result.CloseStatus != null)
+                                break;
+                            
+                            if (_cancellationToken.IsCancellationRequested)
+                                break;
                             
                             ms.Write(buffer.Array, buffer.Offset, result.Count);
                         }
                         while (!result.EndOfMessage);
 
-                        if (result.MessageType == WebSocketMessageType.Close)
+                        if (result.CloseStatus != null && !_cancellationToken.IsCancellationRequested)
                         {
-                            await CloseAsync();
+                            await _socket.CloseAsync(
+                                result.CloseStatus.Value,
+                                result.CloseStatusDescription,
+                                _cancellationToken);
                             closeCode = WebSocketHelpers.ConvertCloseCode((int)result.CloseStatus);
                             break;
                         }
                         
+                        if (_cancellationToken.IsCancellationRequested)
+                            break;
+                            
                         ms.Seek(0, SeekOrigin.Begin);
                         lock (_incomingMessages)
-                        {
                             _incomingMessages.Enqueue(ms.ToArray());
-                        }
                     }
                 }
             }
