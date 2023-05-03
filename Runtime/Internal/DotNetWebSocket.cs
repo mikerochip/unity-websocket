@@ -172,7 +172,8 @@ namespace Mikerochip.WebSocket.Internal
         #region Internal Methods
         private async Task ReceiveAsync()
         {
-            await new WaitForBackgroundThread();
+            // don't block the main thread while receiving
+            await new WaitForBackgroundThreadStart();
 
             var closeCode = WebSocketCloseCode.Normal;
             var buffer = new ArraySegment<byte>(new byte[_maxReceiveBytes]);
@@ -225,82 +226,60 @@ namespace Mikerochip.WebSocket.Internal
             }
             finally
             {
-                await new WaitForMainThread();
+                // make sure events are always invoked on main thread
+                await new WaitForMainThreadUpdate();
                 Closed?.Invoke(closeCode);
             }
         }
         #endregion
     }
     
-    internal class MainThreadUtil : MonoBehaviour
+    internal class MainThreadAsyncAwaitRunner : MonoBehaviour
     {
-        public static MainThreadUtil Instance { get; private set; }
-        public static SynchronizationContext synchronizationContext { get; private set; }
+        private static MainThreadAsyncAwaitRunner Instance { get; set; }
+        private static SynchronizationContext SynchronizationContext { get; set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        public static void Setup()
+        private static void Initialize()
         {
-            Instance = new GameObject("MainThreadUtil")
-                .AddComponent<MainThreadUtil>();
-            synchronizationContext = SynchronizationContext.Current;
+            var go = new GameObject(nameof(MainThreadAsyncAwaitRunner));
+            Instance = go.AddComponent<MainThreadAsyncAwaitRunner>();
+            SynchronizationContext = SynchronizationContext.Current;
         }
 
-        public static void Run(IEnumerator waitForUpdate)
+        public static void Run(IEnumerator routine)
         {
-            synchronizationContext.Post(_ => Instance.StartCoroutine(
-                waitForUpdate), null);
+            SynchronizationContext.Post(_ => Instance.StartCoroutine(routine), null);
         }
 
-        void Awake()
+        private void Awake()
         {
-            gameObject.hideFlags = HideFlags.HideAndDontSave;
+            // make the object persist, but don't let it clutter the hierarchy
             DontDestroyOnLoad(gameObject);
+            gameObject.hideFlags = HideFlags.HideAndDontSave;
         }
     }
 
-    internal class WaitForMainThread : CustomYieldInstruction
+    internal class WaitForMainThreadUpdate
     {
-        public override bool keepWaiting
+        // this completes as soon as we can return to the main thread
+        public TaskAwaiter<bool> GetAwaiter()
         {
-            get { return false; }
+            var tcs = new TaskCompletionSource<bool>();
+            MainThreadAsyncAwaitRunner.Run(Wait(tcs));
+            return tcs.Task.GetAwaiter();
         }
 
-        public MainThreadAwaiter GetAwaiter()
+        private static IEnumerator Wait(TaskCompletionSource<bool> tcs)
         {
-            var awaiter = new MainThreadAwaiter();
-            MainThreadUtil.Run(CoroutineWrapper(this, awaiter));
-            return awaiter;
-        }
-
-        public class MainThreadAwaiter : INotifyCompletion
-        {
-            Action continuation;
-
-            public bool IsCompleted { get; set; }
-
-            public void GetResult() { }
-
-            public void Complete()
-            {
-                IsCompleted = true;
-                continuation?.Invoke();
-            }
-
-            void INotifyCompletion.OnCompleted(Action continuation)
-            {
-                this.continuation = continuation;
-            }
-        }
-
-        public static IEnumerator CoroutineWrapper(IEnumerator theWorker, MainThreadAwaiter awaiter)
-        {
-            yield return theWorker;
-            awaiter.Complete();
+            yield return new WaitUntil(() => true);
+            tcs.SetResult(true);
         }
     }
 
-    internal class WaitForBackgroundThread
+    internal class WaitForBackgroundThreadStart
     {
+        // this completes as soon as we can start a ThreadPool thread
         public ConfiguredTaskAwaitable.ConfiguredTaskAwaiter GetAwaiter()
         {
             return Task.Run(() => {}).ConfigureAwait(false).GetAwaiter();
