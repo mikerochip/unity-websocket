@@ -133,20 +133,10 @@ namespace Mikerochip.WebSocket.Internal
                 await _socket.ConnectAsync(_uri, _cancellationToken);
                 Opened?.Invoke();
 
-                // don't block the main thread while pumping messages
-                await new WaitForBackgroundThreadStart();
-
-                await Task.WhenAll(ReceiveAsync(), SendAsync());
-                
-                // return to the main thread before leaving
-                await new WaitForMainThreadUpdate();
+                await RunAsync();
             }
             catch (Exception e)
             {
-                // events should always be invoked on main thread so listeners don't need to
-                // be trapped in a background thread
-                await new WaitForMainThreadUpdate();
-                
                 if (!(e is OperationCanceledException))
                     Error?.Invoke(e.Message);
             }
@@ -183,6 +173,21 @@ namespace Mikerochip.WebSocket.Internal
         #endregion
 
         #region Internal Methods
+        private async Task RunAsync()
+        {
+            // don't block the main thread while pumping messages
+            await new WaitForBackgroundThreadStart();
+            try
+            {
+                await Task.WhenAll(ReceiveAsync(), SendAsync());
+            }
+            finally
+            {
+                // return to the main thread before leaving
+                await new WaitForMainThreadUpdate();
+            }
+        }
+        
         private async Task ReceiveAsync()
         {
             var buffer = new ArraySegment<byte>(new byte[_maxReceiveBytes]);
@@ -234,14 +239,19 @@ namespace Mikerochip.WebSocket.Internal
 
         private async Task SendAsync()
         {
+            var buffer = System.Text.Encoding.UTF8.GetBytes("hello");
             while (_socket.State == System.Net.WebSockets.WebSocketState.Open)
             {
                 ArraySegment<byte> segment;
                 lock (_outgoingMessages)
                 {
+                    if (_outgoingMessages.Count == 0)
+                        continue;
+                    
                     segment = _outgoingMessages.Dequeue();
                 }
                 await _socket.SendAsync(segment, WebSocketMessageType.Binary, endOfMessage: true, _cancellationToken);
+                //await _socket.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, endOfMessage: true, _cancellationToken);
             }
         }
         #endregion
@@ -285,7 +295,7 @@ namespace Mikerochip.WebSocket.Internal
 
         private static IEnumerator Wait(TaskCompletionSource<bool> tcs)
         {
-            yield return new WaitUntil(() => true);
+            yield return null;
             tcs.SetResult(true);
         }
     }
