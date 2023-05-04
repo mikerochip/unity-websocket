@@ -80,7 +80,7 @@ namespace Mikerochip.WebSocket.Internal
         #endregion
 
         #region IWebSocket Methods
-        public void ProcessReceivedMessages()
+        public void ProcessIncomingMessages()
         {
             if (_incomingMessages.Count == 0)
                 return;
@@ -102,17 +102,12 @@ namespace Mikerochip.WebSocket.Internal
             return Task.CompletedTask;
         }
 
-        public Task SendAsync(byte[] bytes)
+        public void AddOutgoingMessage(byte[] bytes)
         {
-            if (bytes.Length > _maxSendBytes)
-                throw new ArgumentException($"Tried to send {bytes.Length} bytes (max {_maxSendBytes})");
-            
             var ret = WebSocketSend(_instanceId, bytes, bytes.Length);
 
             if (ret < 0)
                 Error?.Invoke(ErrorCodeToMessage(ret));
-
-            return Task.CompletedTask;
         }
 
         public Task CloseAsync()

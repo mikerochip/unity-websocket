@@ -17,12 +17,11 @@ namespace Mikerochip.WebSocket.Internal
         private readonly Uri _uri;
         private readonly List<string> _subprotocols;
         private readonly Dictionary<string, string> _headers;
-        private readonly int _maxSendBytes;
         private readonly int _maxReceiveBytes;
         
         private CancellationTokenSource _cancellationTokenSource;
         private CancellationToken _cancellationToken;
-        private ClientWebSocket _socket = new ClientWebSocket();
+        private ClientWebSocket _socket;
 
         private readonly Queue<byte[]> _incomingMessages = new Queue<byte[]>();
         private readonly Queue<ArraySegment<byte>> _outgoingMessages = new Queue<ArraySegment<byte>>();
@@ -67,7 +66,6 @@ namespace Mikerochip.WebSocket.Internal
             string url,
             IEnumerable<string> subprotocols,
             Dictionary<string, string> headers = null,
-            int maxSendBytes = 4096,
             int maxReceiveBytes = 4096)
         {
             var uri = new Uri(url);
@@ -78,20 +76,27 @@ namespace Mikerochip.WebSocket.Internal
             _uri = uri;
             _subprotocols = subprotocols?.ToList();
             _headers = headers?.ToDictionary(pair => pair.Key, pair => pair.Value);
-            _maxSendBytes = maxSendBytes;
             _maxReceiveBytes = maxReceiveBytes;
+            
+            _cancellationTokenSource = new CancellationTokenSource();
+            _cancellationToken = _cancellationTokenSource.Token;
+        }
+
+        public void Dispose()
+        {
+            _socket?.Dispose();
         }
         #endregion
 
         #region IWebSocket Methods
-        public void ProcessReceivedMessages()
+        public void ProcessIncomingMessages()
         {
-            if (_incomingMessages.Count == 0)
-                return;
-
             List<byte[]> messages;
             lock (_incomingMessages)
             {
+                if (_incomingMessages.Count == 0)
+                    return;
+
                 messages = new List<byte[]>(_incomingMessages);
                 _incomingMessages.Clear();
             }
@@ -100,15 +105,19 @@ namespace Mikerochip.WebSocket.Internal
                 MessageReceived?.Invoke(message);
         }
 
+        public void AddOutgoingMessage(byte[] bytes)
+        {
+            lock (_outgoingMessages)
+            {
+                _outgoingMessages.Enqueue(new ArraySegment<byte>(bytes));
+            }
+        }
+
         public async Task ConnectAsync()
         {
+            _socket = new ClientWebSocket();
             try
             {
-                _cancellationTokenSource = new CancellationTokenSource();
-                _cancellationToken = _cancellationTokenSource.Token;
-
-                _socket = new ClientWebSocket();
-
                 if (_subprotocols != null)
                 {
                     foreach (var subprotocol in _subprotocols)
@@ -124,129 +133,115 @@ namespace Mikerochip.WebSocket.Internal
                 await _socket.ConnectAsync(_uri, _cancellationToken);
                 Opened?.Invoke();
 
-                await ReceiveAsync();
+                // don't block the main thread while pumping messages
+                await new WaitForBackgroundThreadStart();
+
+                await Task.WhenAll(ReceiveAsync(), SendAsync());
+                
+                // return to the main thread before leaving
+                await new WaitForMainThreadUpdate();
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                Error?.Invoke(ex.Message);
-                Closed?.Invoke(WebSocketCloseCode.Abnormal);
+                // events should always be invoked on main thread so listeners don't need to
+                // be trapped in a background thread
+                await new WaitForMainThreadUpdate();
+                
+                if (!(e is OperationCanceledException))
+                    Error?.Invoke(e.Message);
             }
             finally
             {
-                _cancellationTokenSource.Cancel();
+                var closeCode = _socket.CloseStatus == null
+                    ? WebSocketCloseCode.Abnormal
+                    : WebSocketHelpers.ConvertCloseCode((int)_socket.CloseStatus);
+                Closed?.Invoke(closeCode);
+                
+                _cancellationTokenSource = new CancellationTokenSource();
+                _cancellationToken = _cancellationTokenSource.Token;
+                _socket?.Dispose();
                 _socket = null;
             }
         }
 
-        public async Task SendAsync(byte[] bytes)
+        public async Task CloseAsync()
         {
-            if (bytes.Length == 0)
-                return;
-            
-            if (bytes.Length > _maxSendBytes)
-                throw new ArgumentException($"Tried to send {bytes.Length} bytes (max {_maxSendBytes})");
-
             if (_socket == null)
                 return;
-
-            var buffer = new ArraySegment<byte>(bytes);
-            await _socket.SendAsync(buffer, WebSocketMessageType.Binary, endOfMessage:true, _cancellationToken);
-        }
-
-        public Task CloseAsync()
-        {
-            switch (State)
+            
+            switch (_socket.State)
             {
-                case WebSocketState.Closed:
-                case WebSocketState.Closing:
+                case System.Net.WebSockets.WebSocketState.Open:
+                    await _socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None);
                     break;
                 
                 default:
                     _cancellationTokenSource?.Cancel();
                     break;
             }
-            return Task.CompletedTask;
         }
         #endregion
 
         #region Internal Methods
         private async Task ReceiveAsync()
         {
-            // don't block the main thread while receiving
-            await new WaitForBackgroundThreadStart();
-
-            var closeCode = WebSocketCloseCode.Normal;
             var buffer = new ArraySegment<byte>(new byte[_maxReceiveBytes]);
-            try
+            while (_socket.State == System.Net.WebSockets.WebSocketState.Open)
             {
-                while (_socket.State == System.Net.WebSockets.WebSocketState.Open)
+                using (var ms = new MemoryStream())
                 {
-                    using (var ms = new MemoryStream())
+                    WebSocketReceiveResult result;
+                    var bytes = 0;
+                    do
                     {
-                        WebSocketReceiveResult result;
-                        var bytes = 0;
-                        do
-                        {
-                            result = await _socket.ReceiveAsync(buffer, _cancellationToken);
-                            
-                            bytes += result.Count;
-                            if (bytes > _maxReceiveBytes)
-                            {
-                                Error?.Invoke($"Received {bytes} bytes (max {_maxReceiveBytes}");
-                                while (!result.EndOfMessage && !_cancellationToken.IsCancellationRequested)
-                                    result = await _socket.ReceiveAsync(buffer, _cancellationToken);
-                                break;
-                            }
-
-                            if (_cancellationToken.IsCancellationRequested)
-                                break;
-                            if (result.CloseStatus != null)
-                                break;
-                            
-                            ms.Write(buffer.Array, buffer.Offset, result.Count);
-                        }
-                        while (!result.EndOfMessage);
-
-                        if (_cancellationToken.IsCancellationRequested)
-                        {
-                            await _socket.CloseAsync(
-                                WebSocketCloseStatus.NormalClosure,
-                                string.Empty,
-                                CancellationToken.None);
-                            break;
-                        }
-                        if (result.CloseStatus != null)
-                        {
-                            closeCode = WebSocketHelpers.ConvertCloseCode((int)result.CloseStatus);
-                            await _socket.CloseAsync(
-                                result.CloseStatus.Value,
-                                result.CloseStatusDescription,
-                                CancellationToken.None);
-                            break;
-                        }
-
+                        result = await _socket.ReceiveAsync(buffer, _cancellationToken);
+                        
+                        bytes += result.Count;
                         if (bytes > _maxReceiveBytes)
-                            continue;
-
-                        lock (_incomingMessages)
                         {
-                            ms.Seek(0, SeekOrigin.Begin);
-                            _incomingMessages.Enqueue(ms.ToArray());
+                            while (!result.EndOfMessage)
+                                result = await _socket.ReceiveAsync(buffer, _cancellationToken);
+                            break;
                         }
+
+                        if (result.CloseStatus != null)
+                            break;
+                        
+                        ms.Write(buffer.Array, buffer.Offset, result.Count);
+                    }
+                    while (!result.EndOfMessage);
+
+                    if (result.CloseStatus != null)
+                    {
+                        await _socket.CloseAsync(
+                            result.CloseStatus.Value,
+                            result.CloseStatusDescription,
+                            CancellationToken.None);
+                        break;
+                    }
+
+                    if (bytes > _maxReceiveBytes)
+                        continue;
+
+                    lock (_incomingMessages)
+                    {
+                        ms.Seek(0, SeekOrigin.Begin);
+                        _incomingMessages.Enqueue(ms.ToArray());
                     }
                 }
             }
-            catch (Exception)
+        }
+
+        private async Task SendAsync()
+        {
+            while (_socket.State == System.Net.WebSockets.WebSocketState.Open)
             {
-                _cancellationTokenSource.Cancel();
-                closeCode = WebSocketCloseCode.Abnormal;
-            }
-            finally
-            {
-                // events should always be invoked on main thread so listeners don't need to
-                // be trapped in a background thread
-                await new WaitForMainThreadUpdate();
-                Closed?.Invoke(closeCode);
+                ArraySegment<byte> segment;
+                lock (_outgoingMessages)
+                {
+                    segment = _outgoingMessages.Dequeue();
+                }
+                await _socket.SendAsync(segment, WebSocketMessageType.Binary, endOfMessage: true, _cancellationToken);
             }
         }
         #endregion

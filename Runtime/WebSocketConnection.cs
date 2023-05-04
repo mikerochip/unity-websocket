@@ -108,11 +108,14 @@ namespace Mikerochip.WebSocket
         public void AddOutgoingMessage(string str)
         {
             var bytes = StringToBytes(str);
-            _outgoingMessages.Enqueue(bytes);
+            AddOutgoingMessage(bytes);
         }
 
         public void AddOutgoingMessage(byte[] bytes)
         {
+            if (bytes.Length == 0)
+                return;
+            
             _outgoingMessages.Enqueue(bytes);
         }
 
@@ -196,7 +199,9 @@ namespace Mikerochip.WebSocket
         {
             while (true)
             {
-                _webSocket?.ProcessReceivedMessages();
+                if (_webSocket?.State == Internal.WebSocketState.Open)
+                    _webSocket.ProcessIncomingMessages();
+                
                 await Task.Yield();
             }
         }
@@ -205,10 +210,14 @@ namespace Mikerochip.WebSocket
         {
             while (true)
             {
-                while (_webSocket?.State == Internal.WebSocketState.Open &&
-                       _outgoingMessages.TryDequeue(out var bytes))
+                while (_webSocket?.State == Internal.WebSocketState.Open)
                 {
-                    await _webSocket.SendAsync(bytes);
+                    if (!_outgoingMessages.TryDequeue(out var bytes))
+                        continue;
+                    if (bytes.Length > Config.MaxSendBytes)
+                        continue;
+                        
+                    _webSocket.AddOutgoingMessage(bytes);
                 }
 
                 await Task.Yield();
@@ -227,7 +236,6 @@ namespace Mikerochip.WebSocket
                 Config.Url,
                 Config.Subprotocols,
                 Config.Headers,
-                Config.MaxSendBytes,
                 Config.MaxReceiveBytes);
             _webSocket.Opened += OnOpened;
             _webSocket.MessageReceived += OnMessageReceived;

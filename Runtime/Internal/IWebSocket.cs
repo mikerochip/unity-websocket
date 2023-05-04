@@ -13,9 +13,9 @@ namespace Mikerochip.WebSocket.Internal
 
         WebSocketState State { get; }
 
-        void ProcessReceivedMessages();
+        void ProcessIncomingMessages();
+        void AddOutgoingMessage(byte[] bytes);
         Task ConnectAsync();
-        Task SendAsync(byte[] bytes);
         Task CloseAsync();
     }
     
@@ -64,13 +64,12 @@ namespace Mikerochip.WebSocket.Internal
             string url,
             IEnumerable<string> subprotocols,
             Dictionary<string, string> headers = null,
-            int maxSendBytes = 4096,
             int maxReceiveBytes = 4096)
         {
             #if !UNITY_WEBGL || UNITY_EDITOR
-                return new DotNetWebSocket(url, subprotocols, headers, maxSendBytes, maxReceiveBytes);
+                return new DotNetWebSocket(url, subprotocols, headers, maxReceiveBytes);
             #else
-                return new WebGLWebSocket(url, subprotocols, headers, maxSendBytes, maxReceiveBytes);
+                return new WebGLWebSocket(url, subprotocols, headers, maxReceiveBytes);
             #endif
         }
     }
