@@ -8,61 +8,6 @@ using UnityEngine;
 
 namespace Mikerochip.WebSocket
 {
-    public enum WebSocketDesiredState
-    {
-        None,
-        Connect,
-        Disconnect,
-    }
-
-    public enum WebSocketState
-    {
-        Invalid,
-        Connecting,
-        Connected,
-        Disconnecting,
-        // client or server requested close messages will result in this state
-        Closed,
-        // errors will disconnect and result in this state - see ErrorMessage property
-        Error,
-    }
-
-    public class WebSocketConfig
-    {
-        public string Url { get; set; }
-        public List<string> Subprotocols { get; set; }
-        public Dictionary<string, string> Headers { get; set; }
-        public int MaxReceiveBytes { get; set; } = 4096;
-        public int MaxSendBytes { get; set; } = 4096;
-    }
-
-    public enum WebSocketDataType
-    {
-        Binary,
-        Text,
-    }
-
-    public class WebSocketMessage
-    {
-        private byte[] _bytes;
-        private string _string;
-       
-        public WebSocketDataType Type { get; }
-        public byte[] Bytes => _bytes ?? (_bytes = WebSocketConnection.StringToBytes(_string));
-        public string String => _string ?? (_string = WebSocketConnection.BytesToString(_bytes));
- 
-        public WebSocketMessage(byte[] bytes)
-        {
-            Type = WebSocketDataType.Binary;
-            _bytes = bytes;
-        }
-        public WebSocketMessage(string str)
-        {
-            Type = WebSocketDataType.Text;
-            _string = str;
-        }
-    }
-
     public class WebSocketConnection : MonoBehaviour
     {
         // set and check what state you requested 
