@@ -4,19 +4,20 @@
 
 # Features
 
-* Add `WebSocketConnection` like you would any MonoBehaviour: in editor or programmatically
+* `WebSocketConnection` is just a `MonoBehaviour`. You can:
+   * Add it to a `GameObject` in the editor
+   * Create one programmatically
 * Flexible config
    * URL is the only requirement
-   * Sane defaults
+   * Has sane defaults
 * Flexible platform support
-   * No external dependencies
+   * No external install requirements or dependencies
    * WebGL uses a bundled JavaScript lib `WebSocket.jslib`
    * Otherwise uses built-in `System.Net.WebSockets`
 * Flexible runtime support
    * Use `async/await`, `Coroutine`s, `Update()`, whatever you want
    * Reusable: connect, disconnect, change URL, connect again, etc
 * Simple to understand API
-   * Simple to understand API
    * Only 2 (optional!) events: `StateChanged`, `MessageReceived`
    * Public API prevents you from corrupting an active connection
 
