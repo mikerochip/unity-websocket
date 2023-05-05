@@ -88,7 +88,7 @@ var LibraryWebSocket = {
 
 		instance.ws.onopen = function() {
 			if (webSocketState.debug)
-				console.log("[JSLIB WebSocket] Connected.");
+				console.log("[JSLIB WebSocket] Connected");
 
 			if (webSocketState.onOpen)
 				Module.dynCall_vi(webSocketState.onOpen, instanceId);
@@ -96,7 +96,7 @@ var LibraryWebSocket = {
 
 		instance.ws.onmessage = function(ev) {
 			if (webSocketState.debug)
-				console.log("[JSLIB WebSocket] Received message:", ev.data);
+				console.log(`[JSLIB WebSocket] Received message: ${ev.data}`);
 
 			if (ev.data instanceof ArrayBuffer) {
 				if (webSocketState.onBinaryMessage === null)
@@ -130,7 +130,7 @@ var LibraryWebSocket = {
 
 		instance.ws.onerror = function(ev) {
 			if (webSocketState.debug)
-				console.log("[JSLIB WebSocket] Error occured.");
+				console.log("[JSLIB WebSocket] Error occured");
 
 			if (webSocketState.onError) {
 				var message = "WebSocket error";
@@ -148,7 +148,7 @@ var LibraryWebSocket = {
 
 		instance.ws.onclose = function(ev) {
 			if (webSocketState.debug)
-				console.log("[JSLIB WebSocket] Closed.");
+				console.log("[JSLIB WebSocket] Closed");
 
 			if (webSocketState.onClose)
 				Module.dynCall_vii(webSocketState.onClose, instanceId, ev.code);
