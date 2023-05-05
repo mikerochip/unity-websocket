@@ -201,7 +201,7 @@ namespace Mikerochip.WebSocket.Internal
         [DllImport ("__Internal")]
         public static extern int WebSocketAllocate(string url);
         [DllImport ("__Internal")]
-        public static extern int WebSocketAddSubprotocol(int instanceId, string subprotocol);
+        public static extern void WebSocketAddSubprotocol(int instanceId, string subprotocol);
         [DllImport ("__Internal")]
         public static extern void WebSocketFree(int instanceId);
         [DllImport ("__Internal")]

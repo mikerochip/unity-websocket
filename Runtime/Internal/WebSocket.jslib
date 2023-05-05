@@ -47,7 +47,7 @@ var LibraryWebSocket = {
 		return id;
 	},
 
-	WebSocketAddSubProtocol: function(instanceId, subprotocol) {
+	WebSocketAddSubprotocol: function(instanceId, subprotocol) {
 		var subprotocolStr = UTF8ToString(subprotocol);
 		webSocketState.instances[instanceId].subprotocols.push(subprotocolStr);
 	},
