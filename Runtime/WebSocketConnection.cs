@@ -21,10 +21,9 @@ namespace Mikerochip.WebSocket
         Connecting,
         Connected,
         Disconnecting,
-        // clean shutdown will result in this state
+        // client or server requested close messages will result in this state
         Closed,
-        // error will result in this state
-        // see LastErrorMessage property for the error message
+        // errors will disconnect and result in this state - see ErrorMessage property
         Error,
     }
 
