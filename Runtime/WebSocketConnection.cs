@@ -131,17 +131,11 @@ namespace Mikerochip.WebSocket
 
         public void AddOutgoingMessage(string message)
         {
-            if (message.Length == 0)
-                return;
-
             _outgoingMessages.Enqueue(new WebSocketMessage(message));
         }
 
         public void AddOutgoingMessage(byte[] message)
         {
-            if (message.Length == 0)
-                return;
-            
             _outgoingMessages.Enqueue(new WebSocketMessage(message));
         }
 
