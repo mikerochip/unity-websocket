@@ -94,10 +94,8 @@ namespace Mikerochip.WebSocket
         public IEnumerable<WebSocketMessage> OutgoingMessages => _outgoingMessages;
         #endregion
         
-        // optional events, raised when current state changes
         #region Public Events
-        public event Action<WebSocketConnection> Connected;
-        public event Action<WebSocketConnection> Disconnected;
+        public event Action<WebSocketConnection> StateChanged;
         // see LastIncomingMessage* to know what was received
         public event Action<WebSocketConnection> MessageReceived;
         #endregion
@@ -183,7 +181,7 @@ namespace Mikerochip.WebSocket
                 {
                     await ShutdownWebSocketAsync();
                     State = ErrorMessage == null ? WebSocketState.Closed : WebSocketState.Error;
-                    Disconnected?.Invoke(this);
+                    StateChanged?.Invoke(this);
                 }
                 
                 // process desired states now
@@ -195,6 +193,8 @@ namespace Mikerochip.WebSocket
                     
                     State = WebSocketState.Connecting;
                     InitializeWebSocket();
+                    StateChanged?.Invoke(this);
+                    
                     _connectTask = _webSocket.ConnectAsync();
                 }
                 else if (DesiredState == WebSocketDesiredState.Disconnect)
@@ -304,7 +304,7 @@ namespace Mikerochip.WebSocket
         private void OnOpened()
         {
             State = WebSocketState.Connected;
-            Connected?.Invoke(this);
+            StateChanged?.Invoke(this);
         }
 
         private void OnMessageReceived(WebSocketMessage message)
@@ -316,12 +316,14 @@ namespace Mikerochip.WebSocket
         private void OnClosed(WebSocketCloseCode closeCode)
         {
             State = WebSocketState.Disconnecting;
+            StateChanged?.Invoke(this);
         }
 
         private void OnError(string errorMessage)
         {
             State = WebSocketState.Disconnecting;
             ErrorMessage = errorMessage;
+            StateChanged?.Invoke(this);
         }
         #endregion
     }
