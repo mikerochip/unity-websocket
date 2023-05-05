@@ -17,6 +17,7 @@
    * Set subprotocols, max send and receive bytes
 * Wide platform support
    * No external install requirements or dependencies
+   * `string` is treated as text and `byte[]` as binary (some servers care)
    * WebGL uses a bundled JavaScript lib `WebSocket.jslib`
    * Otherwise uses built-in `System.Net.WebSockets`
 
