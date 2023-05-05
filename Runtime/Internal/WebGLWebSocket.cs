@@ -256,8 +256,11 @@ namespace Mikerochip.WebSocket.Internal
         {
             var instanceId = WebSocketAllocate(url);
 
-            foreach (var subprotocol in subprotocols)
-                WebSocketAddSubprotocol(instanceId, subprotocol);
+            if (subprotocols != null)
+            {
+                foreach (var subprotocol in subprotocols)
+                    WebSocketAddSubprotocol(instanceId, subprotocol);
+            }
             
             Instances.Add(instanceId, instance);
             return instanceId;
