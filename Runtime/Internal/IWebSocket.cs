@@ -14,13 +14,13 @@ namespace Mikerochip.WebSocket.Internal
         WebSocketState State { get; }
 
         void ProcessIncomingMessages();
-        void AddOutgoingMessage(byte[] bytes);
+        void AddOutgoingMessage(WebSocketMessage message);
         Task ConnectAsync();
         Task CloseAsync();
     }
     
     internal delegate void OpenedHandler();
-    internal delegate void MessageReceivedHandler(byte[] data);
+    internal delegate void MessageReceivedHandler(WebSocketMessage message);
     internal delegate void ErrorHandler(string errorMessage);
     internal delegate void ClosedHandler(WebSocketCloseCode closeCode);
 

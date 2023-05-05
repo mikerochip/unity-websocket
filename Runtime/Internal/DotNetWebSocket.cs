@@ -23,8 +23,8 @@ namespace Mikerochip.WebSocket.Internal
         private CancellationToken _cancellationToken;
         private ClientWebSocket _socket;
 
-        private readonly Queue<byte[]> _incomingMessages = new Queue<byte[]>();
-        private readonly Queue<ArraySegment<byte>> _outgoingMessages = new Queue<ArraySegment<byte>>();
+        private readonly Queue<WebSocketMessage> _incomingMessages = new Queue<WebSocketMessage>();
+        private readonly Queue<WebSocketMessage> _outgoingMessages = new Queue<WebSocketMessage>();
         #endregion
 
         #region IWebSocket Events
@@ -91,13 +91,13 @@ namespace Mikerochip.WebSocket.Internal
         #region IWebSocket Methods
         public void ProcessIncomingMessages()
         {
-            List<byte[]> messages;
+            List<WebSocketMessage> messages;
             lock (_incomingMessages)
             {
                 if (_incomingMessages.Count == 0)
                     return;
 
-                messages = new List<byte[]>(_incomingMessages);
+                messages = new List<WebSocketMessage>(_incomingMessages);
                 _incomingMessages.Clear();
             }
 
@@ -105,11 +105,11 @@ namespace Mikerochip.WebSocket.Internal
                 MessageReceived?.Invoke(message);
         }
 
-        public void AddOutgoingMessage(byte[] bytes)
+        public void AddOutgoingMessage(WebSocketMessage message)
         {
             lock (_outgoingMessages)
             {
-                _outgoingMessages.Enqueue(new ArraySegment<byte>(bytes));
+                _outgoingMessages.Enqueue(message);
             }
         }
 
@@ -196,13 +196,13 @@ namespace Mikerochip.WebSocket.Internal
                 using (var ms = new MemoryStream())
                 {
                     WebSocketReceiveResult result;
-                    var bytes = 0;
+                    var byteCount = 0;
                     do
                     {
                         result = await _socket.ReceiveAsync(buffer, _cancellationToken);
                         
-                        bytes += result.Count;
-                        if (bytes > _maxReceiveBytes)
+                        byteCount += result.Count;
+                        if (byteCount > _maxReceiveBytes)
                         {
                             while (!result.EndOfMessage)
                                 result = await _socket.ReceiveAsync(buffer, _cancellationToken);
@@ -225,13 +225,25 @@ namespace Mikerochip.WebSocket.Internal
                         break;
                     }
 
-                    if (bytes > _maxReceiveBytes)
+                    if (byteCount > _maxReceiveBytes)
                         continue;
 
+                    ms.Seek(0, SeekOrigin.Begin);
+                    var bytes = ms.ToArray();
+                    
+                    WebSocketMessage message;
+                    if (result.MessageType == WebSocketMessageType.Binary)
+                    {
+                        message = new WebSocketMessage(bytes);
+                    }
+                    else
+                    {
+                        var str = System.Text.Encoding.UTF8.GetString(bytes);
+                        message = new WebSocketMessage(str);
+                    }
                     lock (_incomingMessages)
                     {
-                        ms.Seek(0, SeekOrigin.Begin);
-                        _incomingMessages.Enqueue(ms.ToArray());
+                        _incomingMessages.Enqueue(message);
                     }
                 }
             }
@@ -239,19 +251,22 @@ namespace Mikerochip.WebSocket.Internal
 
         private async Task SendAsync()
         {
-            var buffer = System.Text.Encoding.UTF8.GetBytes("hello");
             while (_socket.State == System.Net.WebSockets.WebSocketState.Open)
             {
-                ArraySegment<byte> segment;
+                WebSocketMessage message;
                 lock (_outgoingMessages)
                 {
                     if (_outgoingMessages.Count == 0)
                         continue;
                     
-                    segment = _outgoingMessages.Dequeue();
+                    message = _outgoingMessages.Dequeue();
                 }
-                await _socket.SendAsync(segment, WebSocketMessageType.Binary, endOfMessage: true, _cancellationToken);
-                //await _socket.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, endOfMessage: true, _cancellationToken);
+
+                var segment = new ArraySegment<byte>(message.Bytes);
+                var type = message.Type == WebSocketDataType.Binary
+                    ? WebSocketMessageType.Binary
+                    : WebSocketMessageType.Text;
+                await _socket.SendAsync(segment, type, endOfMessage: true, _cancellationToken);
             }
         }
         #endregion

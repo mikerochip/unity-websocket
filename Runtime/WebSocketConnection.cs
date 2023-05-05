@@ -37,6 +37,33 @@ namespace Mikerochip.WebSocket
         public int MaxSendBytes { get; set; } = 4096;
     }
 
+    public enum WebSocketDataType
+    {
+        Binary,
+        Text,
+    }
+
+    public class WebSocketMessage
+    {
+        private byte[] _bytes;
+        private string _string;
+       
+        public WebSocketDataType Type { get; }
+        public byte[] Bytes => _bytes ?? (_bytes = WebSocketConnection.StringToBytes(_string));
+        public string String => _string ?? (_string = WebSocketConnection.BytesToString(_bytes));
+ 
+        public WebSocketMessage(byte[] bytes)
+        {
+            Type = WebSocketDataType.Binary;
+            _bytes = bytes;
+        }
+        public WebSocketMessage(string str)
+        {
+            Type = WebSocketDataType.Text;
+            _string = str;
+        }
+    }
+
     public class WebSocketConnection : MonoBehaviour
     {
         // set and check what state you requested 
@@ -60,12 +87,11 @@ namespace Mikerochip.WebSocket
         public WebSocketConfig Config { get; private set; }
         public WebSocketState State { get; private set; }
         public string ErrorMessage { get; private set; }
-        public byte[] LastIncomingMessageBytes => _incomingMessages.LastOrDefault();
-        public string LastIncomingMessageString => BytesToString(LastIncomingMessageBytes);
+        public WebSocketMessage LastIncomingMessage => _incomingMessages.LastOrDefault();
         // You probably don't need these and should use the methods instead. These are only here
         // if you really want to manipulate the message Queues directly, for some reason.
-        public IEnumerable<byte[]> IncomingMessages => _incomingMessages;
-        public IEnumerable<byte[]> OutgoingMessages => _outgoingMessages;
+        public IEnumerable<WebSocketMessage> IncomingMessages => _incomingMessages;
+        public IEnumerable<WebSocketMessage> OutgoingMessages => _outgoingMessages;
         #endregion
         
         // optional events, raised when current state changes
@@ -79,8 +105,8 @@ namespace Mikerochip.WebSocket
         #region Private Fields
         private IWebSocket _webSocket;
         private Task _connectTask;
-        private readonly Queue<byte[]> _incomingMessages = new Queue<byte[]>();
-        private readonly Queue<byte[]> _outgoingMessages = new Queue<byte[]>();
+        private readonly Queue<WebSocketMessage> _incomingMessages = new Queue<WebSocketMessage>();
+        private readonly Queue<WebSocketMessage> _outgoingMessages = new Queue<WebSocketMessage>();
         #endregion
 
         #region Public API
@@ -105,8 +131,10 @@ namespace Mikerochip.WebSocket
 
         public void AddOutgoingMessage(string message)
         {
-            var bytes = StringToBytes(message);
-            AddOutgoingMessage(bytes);
+            if (message.Length == 0)
+                return;
+
+            _outgoingMessages.Enqueue(new WebSocketMessage(message));
         }
 
         public void AddOutgoingMessage(byte[] message)
@@ -114,22 +142,27 @@ namespace Mikerochip.WebSocket
             if (message.Length == 0)
                 return;
             
-            _outgoingMessages.Enqueue(message);
+            _outgoingMessages.Enqueue(new WebSocketMessage(message));
         }
 
         public bool TryRemoveIncomingMessage(out string message)
         {
             message = null;
-            if (!TryRemoveIncomingMessage(out byte[] bytes))
+            if (!_incomingMessages.TryDequeue(out var result))
                 return false;
-            
-            message = BytesToString(bytes);
+
+            message = result.String;
             return true;
         }
 
         public bool TryRemoveIncomingMessage(out byte[] message)
         {
-            return _incomingMessages.TryDequeue(out message);
+            message = null;
+            if (!_incomingMessages.TryDequeue(out var result))
+                return false;
+
+            message = result.Bytes;
+            return true;
         }
 
         public static byte[] StringToBytes(string str) =>
@@ -209,12 +242,12 @@ namespace Mikerochip.WebSocket
             while (true)
             {
                 while (_webSocket?.State == Internal.WebSocketState.Open &&
-                       _outgoingMessages.TryDequeue(out var bytes))
+                       _outgoingMessages.TryDequeue(out var message))
                 {
-                    if (bytes.Length > Config.MaxSendBytes)
+                    if (message.Bytes.Length > Config.MaxSendBytes)
                         continue;
                     
-                    _webSocket.AddOutgoingMessage(bytes);
+                    _webSocket.AddOutgoingMessage(message);
                 }
                     
                 await Task.Yield();
@@ -280,9 +313,9 @@ namespace Mikerochip.WebSocket
             Connected?.Invoke(this);
         }
 
-        private void OnMessageReceived(byte[] data)
+        private void OnMessageReceived(WebSocketMessage message)
         {
-            _incomingMessages.Enqueue(data);
+            _incomingMessages.Enqueue(message);
             MessageReceived?.Invoke(this);
         }
 

@@ -9,12 +9,11 @@ namespace Mikerochip.WebSocket.Internal
     internal class WebGLWebSocket : IWebSocket
     {
         #region Private Fields
-        private readonly int _maxSendBytes;
         private readonly int _maxReceiveBytes;
         private readonly int _instanceId;
         // incoming message buffering isn't strictly necessary, it's for API consistency with
         // the System.Net.WebSockets path
-        private readonly Queue<byte[]> _incomingMessages = new Queue<byte[]>();
+        private readonly Queue<WebSocketMessage> _incomingMessages = new Queue<WebSocketMessage>();
         #endregion
 
         #region IWebSocket Events
@@ -57,7 +56,6 @@ namespace Mikerochip.WebSocket.Internal
             string url,
             IEnumerable<string> subprotocols,
             Dictionary<string, string> headers = null,
-            int maxSendBytes = 4096,
             int maxReceiveBytes = 4096)
         {
             var uri = new Uri(url);
@@ -65,7 +63,6 @@ namespace Mikerochip.WebSocket.Internal
             if (!protocol.Equals("ws") && !protocol.Equals("wss"))
                 throw new ArgumentException("Unsupported protocol: " + protocol);
 
-            _maxSendBytes = maxSendBytes;
             _maxReceiveBytes = maxReceiveBytes;
 
             JsLibBridge.Initialize();
@@ -102,9 +99,11 @@ namespace Mikerochip.WebSocket.Internal
             return Task.CompletedTask;
         }
 
-        public void AddOutgoingMessage(byte[] bytes)
+        public void AddOutgoingMessage(WebSocketMessage message)
         {
-            var ret = WebSocketSend(_instanceId, bytes, bytes.Length);
+            var ret = message.Type == WebSocketDataType.Binary
+                ? WebSocketSendBinary(_instanceId, message.Bytes, message.Bytes.Length)
+                : WebSocketSendText(_instanceId, message.String);
 
             if (ret < 0)
                 Error?.Invoke(ErrorCodeToMessage(ret));
@@ -119,7 +118,7 @@ namespace Mikerochip.WebSocket.Internal
                     return Task.CompletedTask;
             }
 
-            var ret = WebSocketClose(_instanceId, (int)WebSocketCloseCode.Normal, null);
+            var ret = WebSocketClose(_instanceId, (int)WebSocketCloseCode.Normal);
 
             if (ret < 0)
                 Error?.Invoke(ErrorCodeToMessage(ret));
@@ -157,24 +156,33 @@ namespace Mikerochip.WebSocket.Internal
         [DllImport("__Internal")]
         private static extern int WebSocketConnect(int instanceId);
         [DllImport("__Internal")]
-        private static extern int WebSocketClose(int instanceId, int code, string reason);
+        private static extern int WebSocketClose(int instanceId, int code);
         [DllImport("__Internal")]
-        private static extern int WebSocketSend(int instanceId, byte[] dataPtr, int dataLength);
+        private static extern int WebSocketSendBinary(int instanceId, byte[] bytes, int length);
+        [DllImport("__Internal")]
+        private static extern int WebSocketSendText(int instanceId, string message);
         [DllImport("__Internal")]
         private static extern int WebSocketGetState(int instanceId);
         #endregion
 
         #region JsLibBridge Event Helpers
         public void OnOpen() => Opened?.Invoke();
-        public void OnMessage(byte[] bytes)
+        public void OnBinaryMessage(byte[] bytes)
         {
             if (bytes.Length > _maxReceiveBytes)
-            {
-                Error?.Invoke($"Received {bytes.Length} bytes (max {_maxReceiveBytes}");
                 return;
-            }
-            
-            _incomingMessages.Enqueue(bytes);
+
+            var message = new WebSocketMessage(bytes);
+            _incomingMessages.Enqueue(message);
+        }
+        public void OnTextMessage(string text)
+        {
+            var bytes = System.Text.Encoding.UTF8.GetBytes(text);
+            if (bytes.Length > _maxReceiveBytes)
+                return;
+
+            var message = new WebSocketMessage(text);
+            _incomingMessages.Enqueue(message);
         }
         public void OnError(string errorMsg) => Error?.Invoke(errorMsg);
         public void OnClose(int closeCode) => Closed?.Invoke(WebSocketHelpers.ConvertCloseCode(closeCode));
@@ -185,7 +193,8 @@ namespace Mikerochip.WebSocket.Internal
     {
         #region Marshalled Types
         public delegate void OpenCallback(int instanceId);
-        public delegate void MessageCallback(int instanceId, IntPtr msgPtr, int msgSize);
+        public delegate void BinaryMessageCallback(int instanceId, IntPtr messagePtr, int messageLength);
+        public delegate void TextMessageCallback(int instanceId, IntPtr messagePtr);
         public delegate void ErrorCallback(int instanceId, IntPtr errorPtr);
         public delegate void CloseCallback(int instanceId, int closeCode);
 
@@ -198,7 +207,9 @@ namespace Mikerochip.WebSocket.Internal
         [DllImport ("__Internal")]
         public static extern void WebSocketSetOnOpen(OpenCallback callback);
         [DllImport ("__Internal")]
-        public static extern void WebSocketSetOnMessage(MessageCallback callback);
+        public static extern void WebSocketSetOnBinaryMessage(BinaryMessageCallback callback);
+        [DllImport ("__Internal")]
+        public static extern void WebSocketSetOnTextMessage(TextMessageCallback callback);
         [DllImport ("__Internal")]
         public static extern void WebSocketSetOnError(ErrorCallback callback);
         [DllImport ("__Internal")]
@@ -222,7 +233,8 @@ namespace Mikerochip.WebSocket.Internal
             IsInitialized = true;
             
             WebSocketSetOnOpen(OnOpen);
-            WebSocketSetOnMessage(OnMessage);
+            WebSocketSetOnBinaryMessage(OnBinaryMessage);
+            WebSocketSetOnTextMessage(OnTextMessage);
             WebSocketSetOnError(OnError);
             WebSocketSetOnClose(OnClose);
         }
@@ -253,15 +265,26 @@ namespace Mikerochip.WebSocket.Internal
                 instance.OnOpen();
         }
 
-        [MonoPInvokeCallback(typeof(MessageCallback))]
-        private static void OnMessage(int instanceId, IntPtr msgPtr, int msgSize)
+        [MonoPInvokeCallback(typeof(BinaryMessageCallback))]
+        private static void OnBinaryMessage(int instanceId, IntPtr messagePtr, int messageLength)
         {
             if (Instances.TryGetValue(instanceId, out var instance))
             {
-                var bytes = new byte[msgSize];
-                Marshal.Copy(msgPtr, bytes, 0, msgSize);
+                var bytes = new byte[messageLength];
+                Marshal.Copy(messagePtr, bytes, 0, messageLength);
 
-                instance.OnMessage(bytes);
+                instance.OnBinaryMessage(bytes);
+            }
+        }
+
+        [MonoPInvokeCallback(typeof(TextMessageCallback))]
+        private static void OnTextMessage(int instanceId, IntPtr messagePtr)
+        {
+            if (Instances.TryGetValue(instanceId, out var instance))
+            {
+                var msg = Marshal.PtrToStringAuto(messagePtr);
+
+                instance.OnTextMessage(msg);
             }
         }
 
