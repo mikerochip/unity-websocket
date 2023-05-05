@@ -166,7 +166,11 @@ namespace Mikerochip.WebSocket.Internal
         #endregion
 
         #region JsLibBridge Event Helpers
-        public void OnOpen() => Opened?.Invoke();
+        public void OnOpen()
+        {
+            Opened?.Invoke();
+        }
+        
         public void OnBinaryMessage(byte[] bytes)
         {
             if (bytes.Length > _maxReceiveBytes)
@@ -175,6 +179,7 @@ namespace Mikerochip.WebSocket.Internal
             var message = new WebSocketMessage(bytes);
             _incomingMessages.Enqueue(message);
         }
+        
         public void OnTextMessage(string text)
         {
             var bytes = System.Text.Encoding.UTF8.GetBytes(text);
@@ -184,36 +189,44 @@ namespace Mikerochip.WebSocket.Internal
             var message = new WebSocketMessage(text);
             _incomingMessages.Enqueue(message);
         }
-        public void OnError(string errorMsg) => Error?.Invoke(errorMsg);
-        public void OnClose(int closeCode) => Closed?.Invoke(WebSocketHelpers.ConvertCloseCode(closeCode));
+        
+        public void OnError(string errorMsg)
+        {
+            Error?.Invoke(errorMsg);
+        }
+        
+        public void OnClose(int closeCode)
+        {
+            Closed?.Invoke(WebSocketHelpers.ConvertCloseCode(closeCode));
+        }
         #endregion
     }
 
     internal static class JsLibBridge
     {
         #region Marshalled Types
-        public delegate void OpenCallback(int instanceId);
-        public delegate void BinaryMessageCallback(int instanceId, IntPtr messagePtr, int messageLength);
-        public delegate void TextMessageCallback(int instanceId, IntPtr messagePtr);
-        public delegate void ErrorCallback(int instanceId, IntPtr errorPtr);
-        public delegate void CloseCallback(int instanceId, int closeCode);
+        private delegate void OpenCallback(int instanceId);
+        private delegate void BinaryMessageCallback(int instanceId, IntPtr messagePtr, int messageLength);
+        private delegate void TextMessageCallback(int instanceId, IntPtr messagePtr);
+        private delegate void ErrorCallback(int instanceId, IntPtr errorPtr);
+        private delegate void CloseCallback(int instanceId, int closeCode);
 
         [DllImport ("__Internal")]
-        public static extern int WebSocketAllocate(string url);
+        private static extern int WebSocketAllocate(string url);
         [DllImport ("__Internal")]
-        public static extern void WebSocketAddSubprotocol(int instanceId, string subprotocol);
+        private static extern void WebSocketAddSubprotocol(int instanceId, string subprotocol);
         [DllImport ("__Internal")]
-        public static extern void WebSocketFree(int instanceId);
+        private static extern void WebSocketFree(int instanceId);
         [DllImport ("__Internal")]
-        public static extern void WebSocketSetOnOpen(OpenCallback callback);
+        private static extern void WebSocketSetOnOpen(OpenCallback callback);
         [DllImport ("__Internal")]
-        public static extern void WebSocketSetOnBinaryMessage(BinaryMessageCallback callback);
+        private static extern void WebSocketSetOnBinaryMessage(BinaryMessageCallback callback);
         [DllImport ("__Internal")]
-        public static extern void WebSocketSetOnTextMessage(TextMessageCallback callback);
+        private static extern void WebSocketSetOnTextMessage(TextMessageCallback callback);
         [DllImport ("__Internal")]
-        public static extern void WebSocketSetOnError(ErrorCallback callback);
+        private static extern void WebSocketSetOnError(ErrorCallback callback);
         [DllImport ("__Internal")]
-        public static extern void WebSocketSetOnClose(CloseCallback callback);
+        private static extern void WebSocketSetOnClose(CloseCallback callback);
         #endregion
 
         #region External Properties
@@ -261,49 +274,50 @@ namespace Mikerochip.WebSocket.Internal
         [MonoPInvokeCallback(typeof(OpenCallback))]
         private static void OnOpen(int instanceId)
         {
-            if (Instances.TryGetValue(instanceId, out var instance))
-                instance.OnOpen();
+            if (!Instances.TryGetValue(instanceId, out var instance))
+                return;
+            
+            instance.OnOpen();
         }
 
         [MonoPInvokeCallback(typeof(BinaryMessageCallback))]
         private static void OnBinaryMessage(int instanceId, IntPtr messagePtr, int messageLength)
         {
-            if (Instances.TryGetValue(instanceId, out var instance))
-            {
-                var bytes = new byte[messageLength];
-                Marshal.Copy(messagePtr, bytes, 0, messageLength);
-
-                instance.OnBinaryMessage(bytes);
-            }
+            if (!Instances.TryGetValue(instanceId, out var instance))
+                return;
+            
+            var bytes = new byte[messageLength];
+            Marshal.Copy(messagePtr, bytes, 0, messageLength);
+            instance.OnBinaryMessage(bytes);
         }
 
         [MonoPInvokeCallback(typeof(TextMessageCallback))]
         private static void OnTextMessage(int instanceId, IntPtr messagePtr)
         {
-            if (Instances.TryGetValue(instanceId, out var instance))
-            {
-                var msg = Marshal.PtrToStringAuto(messagePtr);
-
-                instance.OnTextMessage(msg);
-            }
+            if (!Instances.TryGetValue(instanceId, out var instance))
+                return;
+            
+            var text = Marshal.PtrToStringAuto(messagePtr);
+            instance.OnTextMessage(text);
         }
 
         [MonoPInvokeCallback(typeof(ErrorCallback))]
         private static void OnError(int instanceId, IntPtr errorPtr)
         {
-            if (Instances.TryGetValue(instanceId, out var instance))
-            {
-                var errorMsg = Marshal.PtrToStringAuto(errorPtr);
-                instance.OnError(errorMsg);
-            }
+            if (!Instances.TryGetValue(instanceId, out var instance))
+                return;
+            
+            var errorMsg = Marshal.PtrToStringAuto(errorPtr);
+            instance.OnError(errorMsg);
         }
 
         [MonoPInvokeCallback(typeof(CloseCallback))]
         private static void OnClose(int instanceId, int closeCode)
         {
-            if (Instances.TryGetValue(instanceId, out var instance)) {
-                instance.OnClose(closeCode);
-            }
+            if (!Instances.TryGetValue(instanceId, out var instance))
+                return;
+            
+            instance.OnClose(closeCode);
         }
         #endregion
     }
