@@ -13,8 +13,7 @@
 * Flexible config
    * URL is the only required config
    * Sane defaults
-   * Change config whenever you want. Config changes next time you connect.
-   * Set subprotocols, max send and receive bytes
+   * Set subprotocols, max send, and max receive bytes
 * Wide platform support
    * No external install requirements or dependencies
    * `string` is treated as text and `byte[]` as binary (some servers care)
