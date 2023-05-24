@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Mikerochip.WebSocket.Internal;
 using UnityEngine;
@@ -45,6 +46,7 @@ namespace Mikerochip.WebSocket
         #endregion
 
         #region Private Fields
+        private CancellationTokenSource _cts;
         private IWebSocket _webSocket;
         private Task _connectTask;
         private readonly Queue<WebSocketMessage> _incomingMessages = new Queue<WebSocketMessage>();
@@ -111,7 +113,15 @@ namespace Mikerochip.WebSocket
         #region Unity Methods
         private async void Awake()
         {
+            _cts = new CancellationTokenSource();
             await Task.WhenAll(ManageStateAsync(), ConnectAsync(), ReceiveAsync(), SendAsync());
+        }
+
+        private void OnDestroy()
+        {
+            State = WebSocketState.Disconnecting;
+            StateChanged?.Invoke(this);
+            _cts.Cancel();
         }
         #endregion
 
@@ -120,15 +130,18 @@ namespace Mikerochip.WebSocket
         {
             while (true)
             {
-                // handle active states first
+                // process active states first
                 if (State == WebSocketState.Disconnecting)
                 {
                     await ShutdownWebSocketAsync();
                     State = ErrorMessage == null ? WebSocketState.Closed : WebSocketState.Error;
                     StateChanged?.Invoke(this);
+
+                    if (_cts.IsCancellationRequested)
+                        break;
                 }
                 
-                // process desired states now
+                // process desired states second
                 if (DesiredState == WebSocketDesiredState.Connect)
                 {
                     DesiredState = WebSocketDesiredState.None;
@@ -139,7 +152,7 @@ namespace Mikerochip.WebSocket
                     InitializeWebSocket();
                     StateChanged?.Invoke(this);
                     
-                    _connectTask = _webSocket.ConnectAsync();
+                    _connectTask = _webSocket!.ConnectAsync();
                 }
                 else if (DesiredState == WebSocketDesiredState.Disconnect)
                 {
@@ -157,6 +170,9 @@ namespace Mikerochip.WebSocket
         {
             while (true)
             {
+                if (_cts.IsCancellationRequested)
+                    break;
+                
                 if (_connectTask != null)
                     await _connectTask;
 
@@ -168,6 +184,9 @@ namespace Mikerochip.WebSocket
         {
             while (true)
             {
+                if (_cts.IsCancellationRequested)
+                    break;
+                
                 if (_webSocket?.State == Internal.WebSocketState.Open)
                     _webSocket.ProcessIncomingMessages();
                 
@@ -179,8 +198,10 @@ namespace Mikerochip.WebSocket
         {
             while (true)
             {
-                while (_webSocket?.State == Internal.WebSocketState.Open &&
-                       _outgoingMessages.TryDequeue(out var message))
+                if (_cts.IsCancellationRequested)
+                    break;
+                
+                while (_webSocket?.State == Internal.WebSocketState.Open && _outgoingMessages.TryDequeue(out var message))
                 {
                     if (message.Bytes.Length > Config.MaxSendBytes)
                         continue;
@@ -216,7 +237,11 @@ namespace Mikerochip.WebSocket
             if (_webSocket == null)
                 return;
             
-            await _webSocket.CloseAsync();
+            if (_cts.IsCancellationRequested)
+                _webSocket.Cancel();
+            else
+                await _webSocket.CloseAsync();
+            
             await _connectTask;
             _connectTask = null;
             

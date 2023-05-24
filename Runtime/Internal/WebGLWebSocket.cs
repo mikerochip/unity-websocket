@@ -125,6 +125,21 @@ namespace Mikerochip.WebSocket.Internal
 
             return Task.CompletedTask;
         }
+
+        public void Cancel()
+        {
+            switch (State)
+            {
+                case WebSocketState.Closed:
+                case WebSocketState.Closing:
+                    return;
+            }
+
+            var ret = WebSocketClose(_instanceId, (int)WebSocketCloseCode.Normal);
+
+            if (ret < 0)
+                Error?.Invoke(ErrorCodeToMessage(ret));
+        }
         #endregion
 
         #region Internal Methods

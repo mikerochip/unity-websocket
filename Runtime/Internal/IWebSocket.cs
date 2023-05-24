@@ -17,6 +17,7 @@ namespace Mikerochip.WebSocket.Internal
         void AddOutgoingMessage(WebSocketMessage message);
         Task ConnectAsync();
         Task CloseAsync();
+        void Cancel();
     }
     
     internal delegate void OpenedHandler();

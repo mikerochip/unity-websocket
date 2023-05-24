@@ -165,10 +165,18 @@ namespace Mikerochip.WebSocket.Internal
                     await _socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None);
                     break;
                 
-                default:
+                case System.Net.WebSockets.WebSocketState.Connecting:
                     _cancellationTokenSource?.Cancel();
                     break;
             }
+        }
+
+        public void Cancel()
+        {
+            if (_socket == null)
+                return;
+            
+            _cancellationTokenSource?.Cancel();
         }
         #endregion
 
