@@ -41,11 +41,12 @@ namespace Mikerochip.WebSocket
         #region Public Events
         public delegate void StateChangeHandler(WebSocketConnection connection,
             WebSocketState oldState, WebSocketState newState);
-        public delegate void MessageReceivedHandler(WebSocketConnection connection,
-            WebSocketMessage message);
+        public delegate void MessageReceivedHandler(WebSocketConnection connection, WebSocketMessage message);
+        public delegate void ErrorHandler(WebSocketConnection connection, string errorMessage);
         
         public event StateChangeHandler StateChanged;
         public event MessageReceivedHandler MessageReceived;
+        public event ErrorHandler Error;
         #endregion
 
         #region Private Fields
@@ -125,6 +126,7 @@ namespace Mikerochip.WebSocket
             var oldState = State;
             State = WebSocketState.Disconnecting;
             StateChanged?.Invoke(this, oldState, State);
+            
             _cts.Cancel();
         }
         #endregion
@@ -297,10 +299,8 @@ namespace Mikerochip.WebSocket
 
         private void OnError(string errorMessage)
         {
-            var oldState = State;
-            State = WebSocketState.Disconnecting;
             ErrorMessage = errorMessage;
-            StateChanged?.Invoke(this, oldState, State);
+            Error?.Invoke(this, errorMessage);
         }
         #endregion
     }
