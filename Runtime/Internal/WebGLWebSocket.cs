@@ -148,21 +148,21 @@ namespace Mikerochip.WebSocket.Internal
             switch (errorCode)
             {
                 case -1:
-                    return "WebSocket instance not found.";
+                    return "WebSocket not created";
                 case -2:
-                    return "WebSocket is already connected or in connecting state.";
+                    return "Already connected or in connecting state";
                 case -3:
-                    return "WebSocket is not connected.";
+                    return "Not connected";
                 case -4:
-                    return "WebSocket is already closing.";
+                    return "Already closing";
                 case -5:
-                    return "WebSocket is already closed.";
+                    return "Already closed";
                 case -6:
-                    return "WebSocket is not in open state.";
+                    return "WebSocket not opened";
                 case -7:
-                    return "Cannot close WebSocket. An invalid code was specified or reason is too long.";
+                    return "Cannot close, invalid code specified or reason too long";
                 default:
-                    return "Unknown error.";
+                    return "Unknown error";
             }
         }
         #endregion
