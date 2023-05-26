@@ -32,7 +32,6 @@ namespace Mikerochip.WebSocket
         public WebSocketConfig Config { get; private set; }
         public WebSocketState State { get; private set; }
         public string ErrorMessage { get; private set; }
-        public WebSocketMessage LastIncomingMessage => _incomingMessages.LastOrDefault();
         // You probably don't need these and should use the methods instead. These are only here
         // if you really want to manipulate the message Queues directly, for some reason.
         public IEnumerable<WebSocketMessage> IncomingMessages => _incomingMessages;
@@ -40,9 +39,13 @@ namespace Mikerochip.WebSocket
         #endregion
         
         #region Public Events
-        public event Action<WebSocketConnection> StateChanged;
-        // see LastIncomingMessage* to know what was received
-        public event Action<WebSocketConnection> MessageReceived;
+        public delegate void StateChangeHandler(WebSocketConnection connection,
+            WebSocketState oldState, WebSocketState newState);
+        public delegate void MessageReceivedHandler(WebSocketConnection connection,
+            WebSocketMessage message);
+        
+        public event StateChangeHandler StateChanged;
+        public event MessageReceivedHandler MessageReceived;
         #endregion
 
         #region Private Fields
@@ -119,8 +122,9 @@ namespace Mikerochip.WebSocket
 
         private void OnDestroy()
         {
+            var oldState = State;
             State = WebSocketState.Disconnecting;
-            StateChanged?.Invoke(this);
+            StateChanged?.Invoke(this, oldState, State);
             _cts.Cancel();
         }
         #endregion
@@ -135,7 +139,7 @@ namespace Mikerochip.WebSocket
                 {
                     await ShutdownWebSocketAsync();
                     State = ErrorMessage == null ? WebSocketState.Closed : WebSocketState.Error;
-                    StateChanged?.Invoke(this);
+                    StateChanged?.Invoke(this, WebSocketState.Disconnecting, State);
 
                     if (_cts.IsCancellationRequested)
                         break;
@@ -147,10 +151,11 @@ namespace Mikerochip.WebSocket
                     DesiredState = WebSocketDesiredState.None;
                     
                     await ShutdownWebSocketAsync();
-                    
+
+                    var oldState = State;
                     State = WebSocketState.Connecting;
                     InitializeWebSocket();
-                    StateChanged?.Invoke(this);
+                    StateChanged?.Invoke(this, oldState, State);
                     
                     _connectTask = _webSocket!.ConnectAsync();
                 }
@@ -272,27 +277,30 @@ namespace Mikerochip.WebSocket
 
         private void OnOpened()
         {
+            var oldState = State;
             State = WebSocketState.Connected;
-            StateChanged?.Invoke(this);
+            StateChanged?.Invoke(this, oldState, State);
         }
 
         private void OnMessageReceived(WebSocketMessage message)
         {
             _incomingMessages.Enqueue(message);
-            MessageReceived?.Invoke(this);
+            MessageReceived?.Invoke(this, message);
         }
 
         private void OnClosed(WebSocketCloseCode closeCode)
         {
+            var oldState = State;
             State = WebSocketState.Disconnecting;
-            StateChanged?.Invoke(this);
+            StateChanged?.Invoke(this, oldState, State);
         }
 
         private void OnError(string errorMessage)
         {
+            var oldState = State;
             State = WebSocketState.Disconnecting;
             ErrorMessage = errorMessage;
-            StateChanged?.Invoke(this);
+            StateChanged?.Invoke(this, oldState, State);
         }
         #endregion
     }
