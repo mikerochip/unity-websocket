@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -39,12 +38,12 @@ namespace Mikerochip.WebSocket
         #endregion
         
         #region Public Events
-        public delegate void StateChangeHandler(WebSocketConnection connection,
+        public delegate void StateChangedHandler(WebSocketConnection connection,
             WebSocketState oldState, WebSocketState newState);
         public delegate void MessageReceivedHandler(WebSocketConnection connection, WebSocketMessage message);
         public delegate void ErrorHandler(WebSocketConnection connection, string errorMessage);
         
-        public event StateChangeHandler StateChanged;
+        public event StateChangedHandler StateChanged;
         public event MessageReceivedHandler MessageReceived;
         public event ErrorHandler Error;
         #endregion
