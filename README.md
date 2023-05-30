@@ -7,7 +7,7 @@
 * Easy to use
    * `WebSocketConnection` is just a `MonoBehaviour`
    * Doesn't force you to use `async/await` or `Coroutines` - use whatever you want
-   * Only 2 (optional) events: `StateChanged`, `MessageReceived`
+   * Add event listeners or poll the component, it's up to you
    * Public API prevents you from corrupting an active connection
    * Reusable: connect, disconnect, change URL, connect again, etc
 * Flexible config
@@ -18,7 +18,7 @@
    * No external install requirements or dependencies
    * `string` is treated as text and `byte[]` as binary (some servers care)
    * WebGL uses a bundled JavaScript lib `WebSocket.jslib`
-   * Otherwise uses built-in `System.Net.WebSockets`
+   * Other platforms use the built-in `System.Net.WebSockets`
 
 # Install
 
