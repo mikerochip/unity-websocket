@@ -122,9 +122,12 @@ namespace Mikerochip.WebSocket
 
         private void OnDestroy()
         {
-            var oldState = State;
-            State = WebSocketState.Disconnecting;
-            StateChanged?.Invoke(this, oldState, State);
+            if (State == WebSocketState.Connecting || State == WebSocketState.Connected)
+            {
+                var oldState = State;
+                State = WebSocketState.Disconnecting;
+                StateChanged?.Invoke(this, oldState, State);
+            }
             
             _cts.Cancel();
         }
@@ -141,10 +144,10 @@ namespace Mikerochip.WebSocket
                     await ShutdownWebSocketAsync();
                     State = ErrorMessage == null ? WebSocketState.Closed : WebSocketState.Error;
                     StateChanged?.Invoke(this, WebSocketState.Disconnecting, State);
-
-                    if (_cts.IsCancellationRequested)
-                        break;
                 }
+
+                if (_cts.IsCancellationRequested)
+                    break;
                 
                 // process desired states second
                 if (DesiredState == WebSocketDesiredState.Connect)
