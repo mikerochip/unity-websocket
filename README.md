@@ -21,6 +21,8 @@
    * `string` is treated as text and `byte[]` as binary (some servers care)
    * WebGL uses a bundled JavaScript lib `WebSocket.jslib`
    * Other platforms use the built-in `System.Net.WebSockets`
+ 
+⚠️ Headers aren't supported for WebGL because the JavaScript [WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) doesn't support them. See [this StackOverflow issue](https://stackoverflow.com/questions/4361173/http-headers-in-websockets-client-api) for more on that.
 
 # Install
 
