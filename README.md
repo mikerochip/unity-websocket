@@ -1,5 +1,7 @@
 # WebSocket Client for Unity
 
+[![Unity Version](https://img.shields.io/badge/Unity-2019.1%2B-blueviolet?logo=unity)](https://unity3d.com/get-unity/download)
+
 `WebSocketConnection` is an easy-to-use WebSocket client for Unity that Just Works
 
 # Features
@@ -21,8 +23,6 @@
    * Other platforms use the built-in `System.Net.WebSockets`
 
 # Install
-
-*Requires Unity 2019.1 with .NET 4.x Runtime or higher*
 
 See official instructions for how to [Install a Package from a Git URL](https://docs.unity3d.com/Manual/upm-ui-giturl.html)
 
@@ -86,7 +86,7 @@ public void Connect()
 private void OnStateChanged(WebSocketConnection connection, WebSocketState oldState, WebSocketState newState)
 {
     Debug.Log($"OnStateChanged oldState={oldState}|newState={newState}");
-    
+
     if (newState == WebSocketState.Error)
         Debug.LogError($"OnStateChanged Error={_Connection.ErrorMessage}");
 }
