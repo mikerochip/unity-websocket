@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace Mikerochip.WebSocket.Internal
+namespace MikeSchweitzer.WebSocket.Internal
 {
     internal interface IWebSocket
     {

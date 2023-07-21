@@ -9,7 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
-namespace Mikerochip.WebSocket.Internal
+namespace MikeSchweitzer.WebSocket.Internal
 {
     internal class DotNetWebSocket : IWebSocket
     {

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Mikerochip.WebSocket
+namespace MikeSchweitzer.WebSocket
 {
     public class WebSocketConfig
     {

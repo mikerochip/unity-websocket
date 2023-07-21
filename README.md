@@ -35,7 +35,7 @@ The URL is https://github.com/mikerochip/unity-websocket.git
 Assume we have a class like this for the following samples:
 
 ```CSharp
-using Mikerochip.WebSocket;
+using MikeSchweitzer.WebSocket;
 
 public class Tester : MonoBehaviour
 {

@@ -3,10 +3,10 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Mikerochip.WebSocket.Internal;
+using MikeSchweitzer.WebSocket.Internal;
 using UnityEngine;
 
-namespace Mikerochip.WebSocket
+namespace MikeSchweitzer.WebSocket
 {
     public class WebSocketConnection : MonoBehaviour
     {

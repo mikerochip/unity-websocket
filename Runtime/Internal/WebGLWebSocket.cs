@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using AOT;
 
-namespace Mikerochip.WebSocket.Internal
+namespace MikeSchweitzer.WebSocket.Internal
 {
     internal class WebGLWebSocket : IWebSocket
     {

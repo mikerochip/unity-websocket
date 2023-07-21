@@ -1,5 +1,5 @@
 {
-  "name": "com.mikerochip.websocket",
+  "name": "com.mikeschweitzer.websocket",
   "version": "1.0.0",
   "displayName": "WebSocket Client",
   "description": "Simple, flexible WebSocket client. Add the WebSocketConnection MonoBehaviour anywhere in your scene.",
@@ -12,7 +12,7 @@
   ],
   "author": {
     "name": "Mike Schweitzer",
-    "email": "mschweitzer@gmail.com",
+    "email": "mike@mikeschweitzer.com",
     "url": "https://github.com/mikerochip/unity-websocket"
   }
 }

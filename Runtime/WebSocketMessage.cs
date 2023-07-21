@@ -1,5 +1,5 @@
 
-namespace Mikerochip.WebSocket
+namespace MikeSchweitzer.WebSocket
 {
     public enum WebSocketDataType
     {

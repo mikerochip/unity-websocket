@@ -1,6 +1,6 @@
 {
-    "name": "Mikerochip.WebSocket",
-    "rootNamespace": "Mikerochip.WebSocket",
+    "name": "MikeSchweitzer.WebSocket",
+    "rootNamespace": "MikeSchweitzer.WebSocket",
     "references": [],
     "optionalUnityReferences": [],
     "includePlatforms": [],
