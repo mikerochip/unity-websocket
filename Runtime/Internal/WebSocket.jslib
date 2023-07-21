@@ -44,7 +44,7 @@ var LibraryWebSocket =
     WebSocketAllocate: function(url)
     {
         var urlStr = UTF8ToString(url);
-        var id = webSocketState.lastId++;
+        var id = ++webSocketState.lastId;
 
         webSocketState.instances[id] = {
             subprotocols: [],
