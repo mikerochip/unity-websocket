@@ -41,11 +41,11 @@ namespace Mikerochip.WebSocket
         public delegate void StateChangedHandler(WebSocketConnection connection,
             WebSocketState oldState, WebSocketState newState);
         public delegate void MessageReceivedHandler(WebSocketConnection connection, WebSocketMessage message);
-        public delegate void ErrorHandler(WebSocketConnection connection, string errorMessage);
+        public delegate void ErrorMessageReceivedHandler(WebSocketConnection connection, string errorMessage);
         
         public event StateChangedHandler StateChanged;
         public event MessageReceivedHandler MessageReceived;
-        public event ErrorHandler Error;
+        public event ErrorMessageReceivedHandler ErrorMessageReceived;
         #endregion
 
         #region Private Fields
@@ -142,8 +142,9 @@ namespace Mikerochip.WebSocket
                 if (State == WebSocketState.Disconnecting)
                 {
                     await ShutdownWebSocketAsync();
-                    State = ErrorMessage == null ? WebSocketState.Closed : WebSocketState.Error;
-                    StateChanged?.Invoke(this, WebSocketState.Disconnecting, State);
+                    var oldState = State;
+                    State = WebSocketState.Disconnected;
+                    StateChanged?.Invoke(this, oldState, State);
                 }
 
                 if (_cts.IsCancellationRequested)
@@ -302,7 +303,7 @@ namespace Mikerochip.WebSocket
         private void OnError(string errorMessage)
         {
             ErrorMessage = errorMessage;
-            Error?.Invoke(this, errorMessage);
+            ErrorMessageReceived?.Invoke(this, errorMessage);
         }
         #endregion
     }

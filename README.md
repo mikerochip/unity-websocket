@@ -77,7 +77,7 @@ private void Awake()
 
 private void OnDestroy()
 {
-   _Connection.Disconnect();
+    _Connection.StateChanged -= OnStateChanged;
 }
 
 public void Connect()
@@ -85,35 +85,38 @@ public void Connect()
     _Connection.Connect(_Url);
 }
 
+public void Disconnect()
+{
+    _Connection.Disconnect();
+}
+
 private void OnStateChanged(WebSocketConnection connection, WebSocketState oldState, WebSocketState newState)
 {
     Debug.Log($"OnStateChanged oldState={oldState}|newState={newState}");
-
-    if (newState == WebSocketState.Error)
-        Debug.LogError($"OnStateChanged Error={_Connection.ErrorMessage}");
 }
 ```
 
 ## Reconnect
+
+### Coroutine Style
 ```CSharp
 IEnumerator Reconnect()
 {
-   _Connection.Disconnect();
-   yield return new WaitWhile(_Connection.State == WebSocketState.Disconnecting);
-   _Connection.Connect();
+   Disconnect();
+   yield return new WaitUntil(_Connection.State == WebSocketState.Disconnected);
+   // you can change the DesiredUrl if you want
+   Connect();
 }
+```
 
-void Reconnect()
+### Event Style
+```CSharp
+void OnStateChanged(WebSocketConnection connection, WebSocketState oldState, WebSocketState newState)
 {
-    _Connection.StateChanged += OnStateChanged;
-    _Connection.Disconnect();
-
-    void OnStateChanged(WebSocketConnection connection, WebSocketState oldState, WebSocketState newState)
+    switch (newState == WebSocketState.Disconnected)
     {
-        if (newState == WebSocketState.Disconnecting)
-            return;
+        // you can change the DesiredUrl if you want
         _Connection.Connect();
-        _Connection.StateChanged -= OnStateChanged;
     }
 }
 ```
@@ -122,21 +125,14 @@ void Reconnect()
 
 ### Update Style
 ```CSharp
-private bool _handledError;
+private string _lastError;
 
 private void Update()
 {
-    if (_Connection.State == WebSocketState.Error)
+    if (_lastError != _Connection.ErrorMessage)
     {
-        if (!_handledError)
-        {
-            Debug.LogError(_Connection.ErrorMessage);
-            _handledError = true;
-        }
-    }
-    else
-    {
-        _handledError = false;
+        _lastError = _Connection.ErrorMessage;
+        Debug.LogError(_Connection.ErrorMessage);
     }
 }
 ```
@@ -145,10 +141,10 @@ private void Update()
 ```CSharp
 private void Awake()
 {
-    _Connection.Error += OnError;
+    _Connection.ErrorMessageReceived += OnErrorMessageReceived;
 }
 
-void OnError(WebSocketConnection connection, string error)
+void OnErrorMessageReceived(WebSocketConnection connection, string error)
 {
     Debug.LogError(error);
 }
