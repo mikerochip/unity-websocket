@@ -47,13 +47,13 @@ public class Tester : MonoBehaviour
 ## Connect
 ```CSharp
 // inline style
-void Connect()
+public void Connect()
 {
     _Connection.Connect(_Url);
 }
 
 // property style
-void Connect()
+public void Connect()
 {
     _Connection.DesiredUrl = _Url;
     _Connection.Connect();
@@ -62,7 +62,7 @@ void Connect()
 
 ## Disconnect
 ```CSharp
-void Disconnect()
+public void Disconnect()
 {
     _Connection.Disconnect();
 }
@@ -100,22 +100,22 @@ private void OnStateChanged(WebSocketConnection connection, WebSocketState oldSt
 
 ### Coroutine Style
 ```CSharp
-IEnumerator Reconnect()
+public IEnumerator Reconnect()
 {
    Disconnect();
    yield return new WaitUntil(_Connection.State == WebSocketState.Disconnected);
-   // you can change the DesiredUrl if you want
+   // you can change the DesiredUrl or pass in a new url
    Connect();
 }
 ```
 
 ### Event Style
 ```CSharp
-void OnStateChanged(WebSocketConnection connection, WebSocketState oldState, WebSocketState newState)
+private void OnStateChanged(WebSocketConnection connection, WebSocketState oldState, WebSocketState newState)
 {
     switch (newState == WebSocketState.Disconnected)
     {
-        // you can change the DesiredUrl if you want
+        // you can change the DesiredUrl first
         _Connection.Connect();
     }
 }
@@ -144,7 +144,7 @@ private void Awake()
     _Connection.ErrorMessageReceived += OnErrorMessageReceived;
 }
 
-void OnErrorMessageReceived(WebSocketConnection connection, string error)
+private void OnErrorMessageReceived(WebSocketConnection connection, string error)
 {
     Debug.LogError(error);
 }
@@ -152,12 +152,12 @@ void OnErrorMessageReceived(WebSocketConnection connection, string error)
 
 ## Send Messages
 ```CSharp
-void SendString()
+public void SendString()
 {
     _Connection.AddOutgoingMessage("hello");
 }
 
-void SendBinary()
+public void SendBinary()
 {
     var bytes = Encoding.UTF8.GetBytes("hello");
     _Connection.AddOutgoingMessage(bytes);
