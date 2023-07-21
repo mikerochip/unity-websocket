@@ -48,6 +48,10 @@ namespace MikeSchweitzer.WebSocket
         public event ErrorMessageReceivedHandler ErrorMessageReceived;
         #endregion
 
+        #region Private Properties
+        private static string OutgoingExceptionMessage => $"Outgoing messages may only be added while {WebSocketState.Connected}. Current state is {State}.";
+        #endregion
+
         #region Private Fields
         private CancellationTokenSource _cts;
         private IWebSocket _webSocket;
@@ -78,11 +82,17 @@ namespace MikeSchweitzer.WebSocket
 
         public void AddOutgoingMessage(string message)
         {
+            if (State != WebSocketState.Connected)
+                throw new InvalidOperationException(OutgoingExceptionMessage);
+            
             _outgoingMessages.Enqueue(new WebSocketMessage(message));
         }
 
         public void AddOutgoingMessage(byte[] message)
         {
+            if (State != WebSocketState.Connected)
+                throw new InvalidOperationException(OutgoingExceptionMessage);
+
             _outgoingMessages.Enqueue(new WebSocketMessage(message));
         }
 
@@ -154,13 +164,12 @@ namespace MikeSchweitzer.WebSocket
                 if (DesiredState == WebSocketDesiredState.Connect)
                 {
                     DesiredState = WebSocketDesiredState.None;
-                    
-                    await ShutdownWebSocketAsync();
-
                     var oldState = State;
                     State = WebSocketState.Connecting;
-                    InitializeWebSocket();
                     StateChanged?.Invoke(this, oldState, State);
+                    
+                    await ShutdownWebSocketAsync();
+                    InitializeWebSocket();
                     
                     _connectTask = _webSocket!.ConnectAsync();
                 }
@@ -244,6 +253,9 @@ namespace MikeSchweitzer.WebSocket
 
         private async Task ShutdownWebSocketAsync()
         {
+            _incomingMessages.Clear();
+            _outgoingMessages.Clear();
+            
             if (_webSocket == null)
                 return;
             
@@ -254,9 +266,6 @@ namespace MikeSchweitzer.WebSocket
             
             await _connectTask;
             _connectTask = null;
-            
-            _incomingMessages.Clear();
-            _outgoingMessages.Clear();
             
             _webSocket.Opened -= OnOpened;
             _webSocket.MessageReceived -= OnMessageReceived;
