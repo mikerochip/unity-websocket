@@ -68,7 +68,24 @@ public void Disconnect()
 }
 ```
 
-## Connection Management
+## State Management
+
+### Update Style
+```CSharp
+private WebSocketState _oldState;
+
+private void Update()
+{
+    var newState = WebSocketConnection.State;
+    if (_oldState != newState)
+    {
+        Debug.Log($"OnStateChanged oldState={_oldState}|newState={newState}");
+        _oldState = state;
+    }
+}
+```
+
+### Event Style
 ```CSharp
 private void Awake()
 {
@@ -121,7 +138,11 @@ private void OnStateChanged(WebSocketConnection connection, WebSocketState oldSt
 }
 ```
 
-## Error Handling
+## Error Messages
+
+**NOTE: These are just error messages, not states. See the State Management section.**
+
+Generally speaking, these messages are derived from platform-specific WebSocket errors.
 
 ### Update Style
 ```CSharp
@@ -142,6 +163,11 @@ private void Update()
 private void Awake()
 {
     _Connection.ErrorMessageReceived += OnErrorMessageReceived;
+}
+
+private void OnDestroy()
+{
+    _Connection.ErrorMessageReceived -= OnErrorMessageReceived;
 }
 
 private void OnErrorMessageReceived(WebSocketConnection connection, string error)
@@ -180,6 +206,11 @@ private void Update()
 private void Awake()
 {
     _Connection.MessageReceived += OnMessageReceived;
+}
+
+private void OnDestroy()
+{
+    _Connection.MessageReceived -= OnMessageReceived;
 }
 
 private void OnMessageReceived(WebSocketConnection connection, WebSocketMessage message)
