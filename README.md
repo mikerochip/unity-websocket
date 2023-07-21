@@ -230,6 +230,8 @@ private async Task ReceiveMessagesAsync()
     {
         if (_Connection.TryRemoveIncomingMessage(out string message))
             Debug.Log(message);
+
+        await Task.Yield();
     }
 }
 ```
