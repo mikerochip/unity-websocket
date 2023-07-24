@@ -10,7 +10,6 @@ namespace MikeSchweitzer.WebSocket
 {
     public class WebSocketConnection : MonoBehaviour
     {
-        // set and check what state you requested 
         #region Desired State Properties
         public string DesiredUrl
         {
@@ -25,14 +24,14 @@ namespace MikeSchweitzer.WebSocket
         public WebSocketDesiredState DesiredState { get; private set; }
         #endregion
         
-        // check the current state of the connection
         #region Current State Properties
         public string Url => Config?.Url;
         public WebSocketConfig Config { get; private set; }
         public WebSocketState State { get; private set; }
         public string ErrorMessage { get; private set; }
-        // You probably don't need these and should use the methods instead. These are only here
-        // if you really want to manipulate the message Queues directly, for some reason.
+        
+        // You probably don't need these and should use methods and events instead. These are
+        // here if you really want to manipulate the underlying collections directly.
         public IEnumerable<WebSocketMessage> IncomingMessages => _incomingMessages;
         public IEnumerable<WebSocketMessage> OutgoingMessages => _outgoingMessages;
         #endregion
@@ -143,11 +142,7 @@ namespace MikeSchweitzer.WebSocket
         private void OnDestroy()
         {
             if (State == WebSocketState.Connecting || State == WebSocketState.Connected)
-            {
-                var oldState = State;
-                State = WebSocketState.Disconnecting;
-                StateChanged?.Invoke(this, oldState, State);
-            }
+                ChangeState(WebSocketState.Disconnecting);
             
             _cts.Cancel();
         }
@@ -162,9 +157,8 @@ namespace MikeSchweitzer.WebSocket
                 if (State == WebSocketState.Disconnecting)
                 {
                     await ShutdownWebSocketAsync();
-                    var oldState = State;
-                    State = WebSocketState.Disconnected;
-                    StateChanged?.Invoke(this, oldState, State);
+                    ChangeState(WebSocketState.Disconnected);
+                    ClearBuffers();
                 }
 
                 if (_cts.IsCancellationRequested)
@@ -174,14 +168,13 @@ namespace MikeSchweitzer.WebSocket
                 if (DesiredState == WebSocketDesiredState.Connect)
                 {
                     DesiredState = WebSocketDesiredState.None;
-                    var oldState = State;
-                    State = WebSocketState.Connecting;
-                    StateChanged?.Invoke(this, oldState, State);
+                    ErrorMessage = null;
+                    Config = DeepCopy(DesiredConfig);
+                    ClearBuffers();
+                    ChangeState(WebSocketState.Connecting);
                     
                     await ShutdownWebSocketAsync();
                     InitializeWebSocket();
-                    
-                    _connectTask = _webSocket!.ConnectAsync();
                 }
                 else if (DesiredState == WebSocketDesiredState.Disconnect)
                 {
@@ -253,10 +246,6 @@ namespace MikeSchweitzer.WebSocket
         #region Internal WebSocket Management
         private void InitializeWebSocket()
         {
-            Config = DeepCopy(DesiredConfig);
-
-            ErrorMessage = null;
-            
             _webSocket = WebSocketHelpers.CreateWebSocket(
                 Config.Url,
                 Config.Subprotocols,
@@ -266,13 +255,12 @@ namespace MikeSchweitzer.WebSocket
             _webSocket.MessageReceived += OnMessageReceived;
             _webSocket.Closed += OnClosed;
             _webSocket.Error += OnError;
+            
+            _connectTask = _webSocket.ConnectAsync();
         }
 
         private async Task ShutdownWebSocketAsync()
         {
-            _incomingMessages.Clear();
-            _outgoingMessages.Clear();
-            
             if (_webSocket == null)
                 return;
             
@@ -291,6 +279,33 @@ namespace MikeSchweitzer.WebSocket
             _webSocket = null;
         }
 
+        private void OnOpened()
+        {
+            ChangeState(WebSocketState.Connected);
+        }
+
+        private void OnMessageReceived(WebSocketMessage message)
+        {
+            _incomingMessages.AddLast(message);
+            if (MessageReceived == null)
+                return;
+            MessageReceived.Invoke(this, message);
+            _incomingMessages.RemoveLast();
+        }
+
+        private void OnClosed(WebSocketCloseCode closeCode)
+        {
+            ChangeState(WebSocketState.Disconnecting);
+        }
+
+        private void OnError(string errorMessage)
+        {
+            ErrorMessage = errorMessage;
+            ErrorMessageReceived?.Invoke(this, errorMessage);
+        }
+        #endregion
+
+        #region Internal State Management
         private static WebSocketConfig DeepCopy(WebSocketConfig src)
         {
             if (src == null)
@@ -306,33 +321,17 @@ namespace MikeSchweitzer.WebSocket
             };
         }
 
-        private void OnOpened()
+        private void ClearBuffers()
+        {
+            _incomingMessages.Clear();
+            _outgoingMessages.Clear();
+        }
+
+        private void ChangeState(WebSocketState newState)
         {
             var oldState = State;
-            State = WebSocketState.Connected;
-            StateChanged?.Invoke(this, oldState, State);
-        }
-
-        private void OnMessageReceived(WebSocketMessage message)
-        {
-            _incomingMessages.AddLast(message);
-            if (MessageReceived == null)
-                return;
-            MessageReceived.Invoke(this, message);
-            _incomingMessages.RemoveLast();
-        }
-
-        private void OnClosed(WebSocketCloseCode closeCode)
-        {
-            var oldState = State;
-            State = WebSocketState.Disconnecting;
-            StateChanged?.Invoke(this, oldState, State);
-        }
-
-        private void OnError(string errorMessage)
-        {
-            ErrorMessage = errorMessage;
-            ErrorMessageReceived?.Invoke(this, errorMessage);
+            State = newState;
+            StateChanged?.Invoke(this, oldState, newState);
         }
         #endregion
     }

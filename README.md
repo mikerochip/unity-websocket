@@ -147,21 +147,6 @@ private void OnStateChanged(WebSocketConnection connection, WebSocketState oldSt
 
 Error messages are generally derived from platform-specific WebSocket errors.
 
-### Update Style
-```CSharp
-private string _lastError;
-
-private void Update()
-{
-    if (_lastError != _Connection.ErrorMessage)
-    {
-        _lastError = _Connection.ErrorMessage;
-        Debug.LogError(_Connection.ErrorMessage);
-    }
-}
-```
-
-### Event Style
 ```CSharp
 private void Awake()
 {
@@ -173,9 +158,10 @@ private void OnDestroy()
     _Connection.ErrorMessageReceived -= OnErrorMessageReceived;
 }
 
-private void OnErrorMessageReceived(WebSocketConnection connection, string error)
+private void OnErrorMessageReceived(WebSocketConnection connection, string errorMessage)
 {
-    Debug.LogError(error);
+    Debug.LogError(errorMessage);
+    // you can also use _Connection.ErrorMessage
 }
 ```
 
