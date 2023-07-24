@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -47,10 +48,6 @@ namespace MikeSchweitzer.WebSocket
         public event ErrorMessageReceivedHandler ErrorMessageReceived;
         #endregion
 
-        #region Private Properties
-        private string OutgoingExceptionMessage => $"State is {State}. Must be {WebSocketState.Connected} to add outgoing messages.";
-        #endregion
-
         #region Private Fields
         private CancellationTokenSource _cts;
         private IWebSocket _webSocket;
@@ -79,26 +76,32 @@ namespace MikeSchweitzer.WebSocket
             DesiredState = WebSocketDesiredState.Disconnect;
         }
 
-        public void AddOutgoingMessage(string message)
+        public void AddOutgoingMessage(string data)
         {
-            if (State != WebSocketState.Connected)
-            {
-                OnError(OutgoingExceptionMessage);
-                return;
-            }
-            
-            _outgoingMessages.AddLast(new WebSocketMessage(message));
+            AddOutgoingMessage(new WebSocketMessage(data));
         }
 
-        public void AddOutgoingMessage(byte[] message)
+        public void AddOutgoingMessage(byte[] data)
+        {
+            AddOutgoingMessage(new WebSocketMessage(data));
+        }
+
+        public void AddOutgoingMessage(WebSocketMessage message)
         {
             if (State != WebSocketState.Connected)
             {
-                OnError(OutgoingExceptionMessage);
+                OnError($"State is {State}. Must be {WebSocketState.Connected} to add outgoing messages.");
                 return;
             }
 
-            _outgoingMessages.AddLast(new WebSocketMessage(message));
+            var size = message.Bytes.Length;
+            if (size > Config.MaxSendBytes)
+            {
+                OnError($"Outgoing message size {size} exceeded max size {Config.MaxSendBytes}");
+                return;
+            }
+
+            _outgoingMessages.AddLast(message);
         }
 
         public bool TryRemoveIncomingMessage(out string message)
@@ -174,7 +177,15 @@ namespace MikeSchweitzer.WebSocket
                     ChangeState(WebSocketState.Connecting);
                     
                     await ShutdownWebSocketAsync();
-                    InitializeWebSocket();
+                    try
+                    {
+                        InitializeWebSocket();
+                    }
+                    catch (Exception e)
+                    {
+                        OnError(e.Message);
+                        ChangeState(WebSocketState.Invalid);
+                    }
                 }
                 else if (DesiredState == WebSocketDesiredState.Disconnect)
                 {
@@ -227,14 +238,6 @@ namespace MikeSchweitzer.WebSocket
                 {
                     var message = _outgoingMessages.First.Value;
                     _outgoingMessages.RemoveFirst();
-
-                    var size = message.Bytes.Length;
-                    if (size > Config.MaxSendBytes)
-                    {
-                        OnError($"Did not send message of size {size} (max {Config.MaxSendBytes})");
-                        continue;
-                    }
-                    
                     _webSocket.AddOutgoingMessage(message);
                 }
                     

@@ -16,15 +16,15 @@ namespace MikeSchweitzer.WebSocket
         private byte[] _bytes;
         private string _string;
        
-        public WebSocketMessage(byte[] bytes)
+        public WebSocketMessage(byte[] data)
         {
             Type = WebSocketDataType.Binary;
-            _bytes = bytes;
+            _bytes = data;
         }
-        public WebSocketMessage(string str)
+        public WebSocketMessage(string data)
         {
             Type = WebSocketDataType.Text;
-            _string = str;
+            _string = data;
         }
     }
 }
