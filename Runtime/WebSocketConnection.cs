@@ -141,10 +141,10 @@ namespace MikeSchweitzer.WebSocket
 
         private void OnDestroy()
         {
+            _cts.Cancel();
+            
             if (State == WebSocketState.Connecting || State == WebSocketState.Connected)
                 ChangeState(WebSocketState.Disconnecting);
-            
-            _cts.Cancel();
         }
         #endregion
 
@@ -179,9 +179,9 @@ namespace MikeSchweitzer.WebSocket
                 else if (DesiredState == WebSocketDesiredState.Disconnect)
                 {
                     DesiredState = WebSocketDesiredState.None;
-
-                    if (_webSocket != null)
-                        await _webSocket.CloseAsync();
+                    
+                    if (State == WebSocketState.Connecting || State == WebSocketState.Connected)
+                        ChangeState(WebSocketState.Disconnecting);
                 }
 
                 await Task.Yield();
@@ -329,6 +329,9 @@ namespace MikeSchweitzer.WebSocket
 
         private void ChangeState(WebSocketState newState)
         {
+            if (State == newState)
+                return;
+            
             var oldState = State;
             State = newState;
             StateChanged?.Invoke(this, oldState, newState);
