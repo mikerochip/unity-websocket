@@ -30,7 +30,7 @@ The URL is https://github.com/mikerochip/unity-websocket.git
 
 # Warnings
 
-* ⚠️ You may only add outgoing messages in the `Connected` state. You will get an `InvalidOperationException` otherwise.
+* ⚠️ You may only add outgoing messages in the `Connected` state. An error will happen otherwise.
 * ⚠️ Headers aren't supported for WebGL because the JavaScript [WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) doesn't support them. See [this StackOverflow issue](https://stackoverflow.com/questions/4361173/http-headers-in-websockets-client-api) for more on that.
 
 # Samples
@@ -181,24 +181,18 @@ private void OnErrorMessageReceived(WebSocketConnection connection, string error
 
 ## Send Messages
 
-⚠️ If you add an outgoing message in a non-Connected state, you will get an exception:
+⚠️ If you add an outgoing message in a non-`Connected` state, you will get an error:
 
-`🛑 InvalidOperationException: State is {State}. Must be Connected to add outgoing messages.`
+`🛑 State is {State}. Must be Connected to add outgoing messages.`
 
 ```CSharp
 public void SendString()
 {
-    if (_Connection.State != WebSocketState.Connected)
-        return;
-    
     _Connection.AddOutgoingMessage("hello");
 }
 
 public void SendBinary()
 {
-    if (_Connection.State != WebSocketState.Connected)
-        return;
-    
     var bytes = Encoding.UTF8.GetBytes("hello");
     _Connection.AddOutgoingMessage(bytes);
 }

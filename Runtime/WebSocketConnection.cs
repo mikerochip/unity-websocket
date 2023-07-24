@@ -83,7 +83,10 @@ namespace MikeSchweitzer.WebSocket
         public void AddOutgoingMessage(string message)
         {
             if (State != WebSocketState.Connected)
-                throw new System.InvalidOperationException(OutgoingExceptionMessage);
+            {
+                OnError(OutgoingExceptionMessage);
+                return;
+            }
             
             _outgoingMessages.AddLast(new WebSocketMessage(message));
         }
@@ -91,7 +94,10 @@ namespace MikeSchweitzer.WebSocket
         public void AddOutgoingMessage(byte[] message)
         {
             if (State != WebSocketState.Connected)
-                throw new System.InvalidOperationException(OutgoingExceptionMessage);
+            {
+                OnError(OutgoingExceptionMessage);
+                return;
+            }
 
             _outgoingMessages.AddLast(new WebSocketMessage(message));
         }
@@ -231,7 +237,10 @@ namespace MikeSchweitzer.WebSocket
 
                     var size = message.Bytes.Length;
                     if (size > Config.MaxSendBytes)
+                    {
+                        OnError($"Did not send message of size {size} (max {Config.MaxSendBytes})");
                         continue;
+                    }
                     
                     _webSocket.AddOutgoingMessage(message);
                 }
