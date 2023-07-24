@@ -18,6 +18,7 @@ namespace MikeSchweitzer.WebSocket.Internal
         private readonly List<string> _subprotocols;
         private readonly Dictionary<string, string> _headers;
         private readonly int _maxReceiveBytes;
+        private readonly int _connectTimeoutMs;
         
         private CancellationTokenSource _cancellationTokenSource;
         private CancellationToken _cancellationToken;
@@ -66,14 +67,15 @@ namespace MikeSchweitzer.WebSocket.Internal
             Uri uri,
             IEnumerable<string> subprotocols,
             Dictionary<string, string> headers = null,
-            int maxReceiveBytes = 4096)
+            int maxReceiveBytes = 4096,
+            int connectTimeoutMs = 6000)
         {
             _uri = uri;
             _subprotocols = subprotocols?.ToList();
             _headers = headers?.ToDictionary(pair => pair.Key, pair => pair.Value);
             _maxReceiveBytes = maxReceiveBytes;
             
-            _cancellationTokenSource = new CancellationTokenSource();
+            _cancellationTokenSource = new CancellationTokenSource(connectTimeoutMs);
             _cancellationToken = _cancellationTokenSource.Token;
         }
 
@@ -132,7 +134,7 @@ namespace MikeSchweitzer.WebSocket.Internal
             }
             catch (Exception e)
             {
-                if (!(e is OperationCanceledException))
+                if (!_cancellationToken.IsCancellationRequested)
                     Error?.Invoke(e.Message);
             }
             finally
@@ -142,7 +144,7 @@ namespace MikeSchweitzer.WebSocket.Internal
                     : WebSocketHelpers.ConvertCloseCode((int)_socket.CloseStatus);
                 Closed?.Invoke(closeCode);
                 
-                _cancellationTokenSource = new CancellationTokenSource();
+                _cancellationTokenSource = new CancellationTokenSource(_connectTimeoutMs);
                 _cancellationToken = _cancellationTokenSource.Token;
                 _socket?.Dispose();
                 _socket = null;
@@ -161,7 +163,7 @@ namespace MikeSchweitzer.WebSocket.Internal
                     break;
                 
                 case System.Net.WebSockets.WebSocketState.Connecting:
-                    _cancellationTokenSource?.Cancel();
+                    _cancellationTokenSource.Cancel();
                     break;
             }
         }
@@ -171,7 +173,7 @@ namespace MikeSchweitzer.WebSocket.Internal
             if (_socket == null)
                 return;
             
-            _cancellationTokenSource?.Cancel();
+            _cancellationTokenSource.Cancel();
         }
         #endregion
 
