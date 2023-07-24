@@ -53,21 +53,15 @@ namespace MikeSchweitzer.WebSocket.Internal
         
         #region Ctor/Dtor
         public WebGLWebSocket(
-            string url,
+            Uri uri,
             IEnumerable<string> subprotocols,
-            Dictionary<string, string> headers = null,
             int maxReceiveBytes = 4096)
         {
-            var uri = new Uri(url);
-            var protocol = uri.Scheme;
-            if (!protocol.Equals("ws") && !protocol.Equals("wss"))
-                throw new ArgumentException("Unsupported protocol: " + protocol);
-
             _maxReceiveBytes = maxReceiveBytes;
 
             JsLibBridge.Initialize();
 
-            _instanceId = JsLibBridge.AddInstance(this, url, subprotocols);
+            _instanceId = JsLibBridge.AddInstance(this, uri.AbsoluteUri, subprotocols);
         }
 
         ~WebGLWebSocket()

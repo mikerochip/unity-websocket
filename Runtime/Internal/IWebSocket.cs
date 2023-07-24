@@ -67,10 +67,15 @@ namespace MikeSchweitzer.WebSocket.Internal
             Dictionary<string, string> headers = null,
             int maxReceiveBytes = 4096)
         {
+            var uri = new Uri(url);
+            var protocol = uri.Scheme;
+            if (!protocol.Equals("ws") && !protocol.Equals("wss"))
+                throw new ArgumentException($"Unsupported protocol: {protocol}");
+            
             #if !UNITY_WEBGL || UNITY_EDITOR
-                return new DotNetWebSocket(url, subprotocols, headers, maxReceiveBytes);
+                return new DotNetWebSocket(uri, subprotocols, headers, maxReceiveBytes);
             #else
-                return new WebGLWebSocket(url, subprotocols, headers, maxReceiveBytes);
+                return new WebGLWebSocket(uri, subprotocols, maxReceiveBytes);
             #endif
         }
     }

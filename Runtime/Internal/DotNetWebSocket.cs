@@ -63,16 +63,11 @@ namespace MikeSchweitzer.WebSocket.Internal
 
         #region Ctor/Dtor
         public DotNetWebSocket(
-            string url,
+            Uri uri,
             IEnumerable<string> subprotocols,
             Dictionary<string, string> headers = null,
             int maxReceiveBytes = 4096)
         {
-            var uri = new Uri(url);
-            var protocol = uri.Scheme;
-            if (!protocol.Equals("ws") && !protocol.Equals("wss"))
-                throw new ArgumentException($"Unsupported protocol: {protocol}");
-
             _uri = uri;
             _subprotocols = subprotocols?.ToList();
             _headers = headers?.ToDictionary(pair => pair.Key, pair => pair.Value);
