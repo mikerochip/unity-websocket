@@ -230,9 +230,6 @@ private void OnDestroy()
 private void OnMessageReceived(WebSocketConnection connection, WebSocketMessage message)
 {
     Debug.Log(message.String);
-
-    // NOTE: the message in the parameter is retained by the connection, so you have to remove it
-    _Connection.TryRemoveIncomingMessage(out string _);
 }
 ```
 

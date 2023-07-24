@@ -56,8 +56,8 @@ namespace MikeSchweitzer.WebSocket
         private CancellationTokenSource _cts;
         private IWebSocket _webSocket;
         private Task _connectTask;
-        private readonly Queue<WebSocketMessage> _incomingMessages = new Queue<WebSocketMessage>();
-        private readonly Queue<WebSocketMessage> _outgoingMessages = new Queue<WebSocketMessage>();
+        private readonly LinkedList<WebSocketMessage> _incomingMessages = new LinkedList<WebSocketMessage>();
+        private readonly LinkedList<WebSocketMessage> _outgoingMessages = new LinkedList<WebSocketMessage>();
         #endregion
 
         #region Public API
@@ -85,7 +85,7 @@ namespace MikeSchweitzer.WebSocket
             if (State != WebSocketState.Connected)
                 throw new System.InvalidOperationException(OutgoingExceptionMessage);
             
-            _outgoingMessages.Enqueue(new WebSocketMessage(message));
+            _outgoingMessages.AddLast(new WebSocketMessage(message));
         }
 
         public void AddOutgoingMessage(byte[] message)
@@ -93,15 +93,17 @@ namespace MikeSchweitzer.WebSocket
             if (State != WebSocketState.Connected)
                 throw new System.InvalidOperationException(OutgoingExceptionMessage);
 
-            _outgoingMessages.Enqueue(new WebSocketMessage(message));
+            _outgoingMessages.AddLast(new WebSocketMessage(message));
         }
 
         public bool TryRemoveIncomingMessage(out string message)
         {
             message = null;
-            if (!_incomingMessages.TryDequeue(out var result))
+            if (_incomingMessages.First == null)
                 return false;
 
+            var result = _incomingMessages.First.Value;
+            _incomingMessages.RemoveFirst();
             message = result.String;
             return true;
         }
@@ -109,9 +111,11 @@ namespace MikeSchweitzer.WebSocket
         public bool TryRemoveIncomingMessage(out byte[] message)
         {
             message = null;
-            if (!_incomingMessages.TryDequeue(out var result))
+            if (_incomingMessages.First == null)
                 return false;
 
+            var result = _incomingMessages.First.Value;
+            _incomingMessages.RemoveFirst();
             message = result.Bytes;
             return true;
         }
@@ -220,9 +224,13 @@ namespace MikeSchweitzer.WebSocket
                 if (_cts.IsCancellationRequested)
                     break;
                 
-                while (_webSocket?.State == Internal.WebSocketState.Open && _outgoingMessages.TryDequeue(out var message))
+                while (_webSocket?.State == Internal.WebSocketState.Open && _outgoingMessages.First != null)
                 {
-                    if (message.Bytes.Length > Config.MaxSendBytes)
+                    var message = _outgoingMessages.First.Value;
+                    _outgoingMessages.RemoveFirst();
+
+                    var size = message.Bytes.Length;
+                    if (size > Config.MaxSendBytes)
                         continue;
                     
                     _webSocket.AddOutgoingMessage(message);
@@ -298,8 +306,11 @@ namespace MikeSchweitzer.WebSocket
 
         private void OnMessageReceived(WebSocketMessage message)
         {
-            _incomingMessages.Enqueue(message);
-            MessageReceived?.Invoke(this, message);
+            _incomingMessages.AddLast(message);
+            if (MessageReceived == null)
+                return;
+            MessageReceived.Invoke(this, message);
+            _incomingMessages.RemoveLast();
         }
 
         private void OnClosed(WebSocketCloseCode closeCode)
