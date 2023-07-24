@@ -49,7 +49,7 @@ namespace MikeSchweitzer.WebSocket
         #endregion
 
         #region Private Properties
-        private static string OutgoingExceptionMessage => $"Outgoing messages may only be added while {WebSocketState.Connected}. Current state is {State}.";
+        private string OutgoingExceptionMessage => $"State is {State}. Must be {WebSocketState.Connected} to add outgoing messages.";
         #endregion
 
         #region Private Fields
@@ -83,7 +83,7 @@ namespace MikeSchweitzer.WebSocket
         public void AddOutgoingMessage(string message)
         {
             if (State != WebSocketState.Connected)
-                throw new InvalidOperationException(OutgoingExceptionMessage);
+                throw new System.InvalidOperationException(OutgoingExceptionMessage);
             
             _outgoingMessages.Enqueue(new WebSocketMessage(message));
         }
@@ -91,7 +91,7 @@ namespace MikeSchweitzer.WebSocket
         public void AddOutgoingMessage(byte[] message)
         {
             if (State != WebSocketState.Connected)
-                throw new InvalidOperationException(OutgoingExceptionMessage);
+                throw new System.InvalidOperationException(OutgoingExceptionMessage);
 
             _outgoingMessages.Enqueue(new WebSocketMessage(message));
         }

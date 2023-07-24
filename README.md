@@ -21,14 +21,17 @@
    * `string` is treated as text and `byte[]` as binary (some servers care)
    * WebGL uses a bundled JavaScript lib `WebSocket.jslib`
    * Other platforms use the built-in `System.Net.WebSockets`
- 
-⚠️ Headers aren't supported for WebGL because the JavaScript [WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) doesn't support them. See [this StackOverflow issue](https://stackoverflow.com/questions/4361173/http-headers-in-websockets-client-api) for more on that.
 
 # Install
 
 See official instructions for how to [Install a Package from a Git URL](https://docs.unity3d.com/Manual/upm-ui-giturl.html)
 
 The URL is https://github.com/mikerochip/unity-websocket.git
+
+# Warnings
+
+* ⚠️ You may only add outgoing messages in the `Connected` state. You will get an `InvalidOperationException` otherwise.
+* ⚠️ Headers aren't supported for WebGL because the JavaScript [WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) doesn't support them. See [this StackOverflow issue](https://stackoverflow.com/questions/4361173/http-headers-in-websockets-client-api) for more on that.
 
 # Samples
 
@@ -142,7 +145,7 @@ private void OnStateChanged(WebSocketConnection connection, WebSocketState oldSt
 
 **NOTE: These are just error messages, not states. See the State Management section.**
 
-Generally speaking, these messages are derived from platform-specific WebSocket errors.
+Error messages are generally derived from platform-specific WebSocket errors.
 
 ### Update Style
 ```CSharp
@@ -177,14 +180,25 @@ private void OnErrorMessageReceived(WebSocketConnection connection, string error
 ```
 
 ## Send Messages
+
+⚠️ If you add an outgoing message in a non-Connected state, you will get an exception:
+
+`🛑 InvalidOperationException: State is {State}. Must be Connected to add outgoing messages.`
+
 ```CSharp
 public void SendString()
 {
+    if (_Connection.State != WebSocketState.Connected)
+        return;
+    
     _Connection.AddOutgoingMessage("hello");
 }
 
 public void SendBinary()
 {
+    if (_Connection.State != WebSocketState.Connected)
+        return;
+    
     var bytes = Encoding.UTF8.GetBytes("hello");
     _Connection.AddOutgoingMessage(bytes);
 }
