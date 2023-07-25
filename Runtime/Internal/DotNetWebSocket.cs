@@ -68,7 +68,7 @@ namespace MikeSchweitzer.WebSocket.Internal
             IEnumerable<string> subprotocols,
             Dictionary<string, string> headers = null,
             int maxReceiveBytes = 4096,
-            int connectTimeoutMs = 6000)
+            int connectTimeoutMs = 60_000)
         {
             _uri = uri;
             _subprotocols = subprotocols?.ToList();
