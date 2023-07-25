@@ -67,15 +67,14 @@ namespace MikeSchweitzer.WebSocket.Internal
             Uri uri,
             IEnumerable<string> subprotocols,
             Dictionary<string, string> headers = null,
-            int maxReceiveBytes = 4096,
-            int connectTimeoutMs = 60_000)
+            int maxReceiveBytes = 4096)
         {
             _uri = uri;
             _subprotocols = subprotocols?.ToList();
             _headers = headers?.ToDictionary(pair => pair.Key, pair => pair.Value);
             _maxReceiveBytes = maxReceiveBytes;
             
-            _cancellationTokenSource = new CancellationTokenSource(connectTimeoutMs);
+            _cancellationTokenSource = new CancellationTokenSource();
             _cancellationToken = _cancellationTokenSource.Token;
         }
 
