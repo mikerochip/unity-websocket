@@ -12,15 +12,6 @@ namespace MikeSchweitzer.WebSocket
     public class WebSocketConnection : MonoBehaviour
     {
         #region Desired State Properties
-        public string DesiredUrl
-        {
-            get => DesiredConfig?.Url;
-            set
-            {
-                DesiredConfig ??= new WebSocketConfig();
-                DesiredConfig.Url = value;
-            }
-        }
         public WebSocketConfig DesiredConfig { get; set; } = new WebSocketConfig();
         public WebSocketDesiredState DesiredState { get; private set; }
         #endregion
@@ -60,7 +51,12 @@ namespace MikeSchweitzer.WebSocket
         public void Connect(string url = null)
         {
             if (url != null)
-                DesiredUrl = url;
+            {
+                if (DesiredConfig == null)
+                    DesiredConfig = new WebSocketConfig { Url = url };
+                else
+                    DesiredConfig.Url = url;
+            }
 
             DesiredState = WebSocketDesiredState.Connect;
         }
