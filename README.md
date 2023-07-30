@@ -58,7 +58,10 @@ public void Connect()
 // property style
 public void Connect()
 {
-    _Connection.DesiredUrl = _Url;
+    _Connection.DesiredConfig = new WebSocketConfig
+    {
+        Url = _Url,
+    };
     _Connection.Connect();
 }
 ```
@@ -124,7 +127,7 @@ public IEnumerator Reconnect()
 {
    Disconnect();
    yield return new WaitUntil(_Connection.State == WebSocketState.Disconnected);
-   // you can change the DesiredUrl or pass in a new url
+   // you can pass in a new url or change DesiredConfig.Url if you want
    Connect();
 }
 ```
@@ -135,7 +138,7 @@ private void OnStateChanged(WebSocketConnection connection, WebSocketState oldSt
 {
     switch (newState == WebSocketState.Disconnected)
     {
-        // you can change the DesiredUrl first
+       // you can pass in a new url or change DesiredConfig.Url if you want
         _Connection.Connect();
     }
 }
