@@ -172,9 +172,7 @@ private void OnErrorMessageReceived(WebSocketConnection connection, string error
 
 ## Send Messages
 
-⚠️ If you add an outgoing message in a non-`Connected` state, you will get an error:
-
-`🛑 State is {State}. Must be Connected to add outgoing messages.`
+⚠️ You must be `Connected` to send messages, otherwise you will get an error
 
 ```CSharp
 public void SendString()
