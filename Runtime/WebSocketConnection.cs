@@ -145,6 +145,18 @@ namespace MikeSchweitzer.WebSocket
             if (State == WebSocketState.Connecting || State == WebSocketState.Connected)
                 ChangeState(WebSocketState.Disconnecting);
         }
+
+        private void OnApplicationQuit()
+        {
+            _cts.Cancel();
+        
+            if (State != WebSocketState.Connecting && State != WebSocketState.Connected)
+                return;
+
+            ChangeState(WebSocketState.Disconnected);
+            ForceShutdownWebSocket();
+            ClearBuffers();
+        }
         #endregion
 
         #region Internal Async Management
@@ -267,8 +279,23 @@ namespace MikeSchweitzer.WebSocket
                 _webSocket.Cancel();
             else
                 await _webSocket.CloseAsync();
-            
+
             await _connectTask;
+            OnWebSocketShutdown();
+        }
+
+        private void ForceShutdownWebSocket()
+        {
+            if (_webSocket == null)
+                return;
+
+            _webSocket.Cancel();
+
+            OnWebSocketShutdown();
+        }
+
+        private void OnWebSocketShutdown()
+        {
             _connectTask = null;
             
             _webSocket.Opened -= OnOpened;
