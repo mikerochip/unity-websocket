@@ -1,0 +1,26 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# general stuff
+[*]
+end_of_line = lf
+trim_trailing_whitespace = true
+insert_final_newline = true
+indent_size = 4
+
+# stuff specific to project code
+[*.{cs,js,ts,py,sh,bat,command,ps1,psm1,psd1}]
+charset = utf-8
+indent_style = space
+
+[*.{json,yml,yaml}]
+charset = utf-8
+indent_style = space
+indent_size = 2
+
+# VS project files
+[*.{sln,csproj,fsproj,vbproj,vcxproj,vcproj,dbproj}]
+end_of_line = crlf
+[*.{lsproj,wixproj,modelproj,sqlproj,wmaproj,xproj}]
+end_of_line = crlf
+[*.{booproj,unityproj,props,filters,vcxitems}]
+end_of_line = crlf
