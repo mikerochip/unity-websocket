@@ -28,11 +28,14 @@ See official instructions for how to [Install a Package from a Git URL](https://
 
 The URL is https://github.com/mikerochip/unity-websocket.git
 
-# ⚠️ Warnings ⚠️
+# ⚠️ Disclaimers ⚠️
 
 * You may only add outgoing messages in the `Connected` state. An error will happen otherwise.
-* Headers aren't supported for WebGL because the JavaScript [WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) doesn't support them. See [this StackOverflow issue](https://stackoverflow.com/questions/4361173/http-headers-in-websockets-client-api) for more on that.
-* You cannot connect using `wss` to a server that does not have a valid SSL cert (no cert or self-signed cert). For WebGL, this is due to a limitation in the JavaScript WebSocket API. For non-WebGL, this is due to a bug in Unity's mono runtime.
+* Headers aren't supported for WebGL because the JavaScript [WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) doesn't support them
+   * See [this StackOverflow issue](https://stackoverflow.com/questions/4361173/http-headers-in-websockets-client-api) for more.
+* You can't bypass server certificate validation when connecting to a secure websocket endpoint (`wss`). That means the endpoint must have a CA-verifiable SSL certificate, it can't have no certs installed or only self-signed certs.
+   * For WebGL, this is due to a limitation in the JavaScript WebSocket API
+   * For non-WebGL, this is due to a bug in Unity's mono runtime
    * There is an [active issue](https://github.com/mikerochip/unity-websocket/issues/7) to address this, but no timeframe for resolution currently.
 
 # Samples
