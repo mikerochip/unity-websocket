@@ -79,7 +79,7 @@ public void Disconnect()
 }
 ```
 
-## State Management
+## State Querying
 
 ### Update Style
 ```CSharp
@@ -91,7 +91,7 @@ private void Update()
     if (_oldState != newState)
     {
         Debug.Log($"OnStateChanged oldState={_oldState}|newState={newState}");
-        _oldState = state;
+        _oldState = newState;
     }
 }
 ```
@@ -108,16 +108,6 @@ private void OnDestroy()
     _Connection.StateChanged -= OnStateChanged;
 }
 
-public void Connect()
-{
-    _Connection.Connect(_Url);
-}
-
-public void Disconnect()
-{
-    _Connection.Disconnect();
-}
-
 private void OnStateChanged(WebSocketConnection connection, WebSocketState oldState, WebSocketState newState)
 {
     Debug.Log($"OnStateChanged oldState={oldState}|newState={newState}");
@@ -132,7 +122,8 @@ public IEnumerator Reconnect()
 {
    Disconnect();
    yield return new WaitUntil(_Connection.State == WebSocketState.Disconnected);
-   // you can pass in a new url or change DesiredConfig.Url if you want
+   
+   // you may change the desired url now, if you want
    Connect();
 }
 ```
@@ -143,7 +134,7 @@ private void OnStateChanged(WebSocketConnection connection, WebSocketState oldSt
 {
     switch (newState == WebSocketState.Disconnected)
     {
-       // you can pass in a new url or change DesiredConfig.Url if you want
+        // you may change the desired url now, if you want
         _Connection.Connect();
     }
 }
@@ -151,7 +142,7 @@ private void OnStateChanged(WebSocketConnection connection, WebSocketState oldSt
 
 ## Error Messages
 
-**NOTE: These are just error messages, not states. See the State Management section.**
+**NOTE: These are just error messages, not states. See the State Querying section.**
 
 Error messages are generally derived from platform-specific WebSocket errors.
 
