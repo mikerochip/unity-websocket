@@ -19,6 +19,7 @@
 * Wide platform support
    * No external install requirements or dependencies
    * `string` is treated as text and `byte[]` as binary (some servers care)
+   * Universal ping-pong support for servers that enforce idle timeouts
    * WebGL uses a bundled JavaScript lib `WebSocket.jslib`
    * Other platforms use the built-in `System.Net.WebSockets`
 
@@ -122,7 +123,7 @@ public IEnumerator Reconnect()
 {
    Disconnect();
    yield return new WaitUntil(_Connection.State == WebSocketState.Disconnected);
-   
+
    // you may change the desired url now, if you want
    Connect();
 }
@@ -253,6 +254,22 @@ private async Task ReceiveMessagesAsync()
         await Task.Yield();
     }
 }
+```
+
+## Universal Ping-Pong Support
+
+WebGL (JavaScript) has no built-in ping-pong support, unlike .NET.
+
+Configuring this will work on both platforms.
+
+⚠️ You must code your server to ignore or echo messages of the same message type (text or binary) and content.
+
+```CSharp
+_Connection.DesiredConfig = new WebSocketConfig
+{
+    PingInterval = TimeSpan.FromSeconds(30),
+    PingMessage = new WebSocketMessage("foo"),
+};
 ```
 
 # Attribution
