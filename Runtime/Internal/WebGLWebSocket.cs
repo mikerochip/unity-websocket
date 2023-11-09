@@ -26,11 +26,11 @@ namespace MikeSchweitzer.WebSocket.Internal
         #region IWebSocket Properties
         public WebSocketState State
         {
-            get 
+            get
             {
                 var state = WebSocketGetState(_instanceId);
 
-                if (state < 0) 
+                if (state < 0)
                     Error?.Invoke(ErrorCodeToMessage(state));
 
                 // see https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/readyState
@@ -50,18 +50,19 @@ namespace MikeSchweitzer.WebSocket.Internal
             }
         }
         #endregion
-        
+
         #region Ctor/Dtor
         public WebGLWebSocket(
             Uri uri,
             IEnumerable<string> subprotocols,
-            int maxReceiveBytes = 4096)
+            int maxReceiveBytes,
+            bool canDebugLog)
         {
             _maxReceiveBytes = maxReceiveBytes;
 
             JsLibBridge.Initialize();
 
-            _instanceId = JsLibBridge.AddInstance(this, uri.AbsoluteUri, subprotocols);
+            _instanceId = JsLibBridge.AddInstance(this, uri.AbsoluteUri, subprotocols, canDebugLog);
         }
 
         ~WebGLWebSocket()
@@ -75,14 +76,14 @@ namespace MikeSchweitzer.WebSocket.Internal
         {
             if (_incomingMessages.Count == 0)
                 return;
-            
+
             var messages = _incomingMessages.ToArray();
             _incomingMessages.Clear();
-            
+
             foreach (var message in messages)
                 MessageReceived?.Invoke(message);
         }
-        
+
         public Task ConnectAsync()
         {
             var ret = WebSocketConnect(_instanceId);
@@ -179,7 +180,7 @@ namespace MikeSchweitzer.WebSocket.Internal
         {
             Opened?.Invoke();
         }
-        
+
         public void OnBinaryMessage(byte[] bytes)
         {
             if (bytes.Length > _maxReceiveBytes)
@@ -188,7 +189,7 @@ namespace MikeSchweitzer.WebSocket.Internal
             var message = new WebSocketMessage(bytes);
             _incomingMessages.Enqueue(message);
         }
-        
+
         public void OnTextMessage(string text)
         {
             var bytes = System.Text.Encoding.UTF8.GetBytes(text);
@@ -198,12 +199,12 @@ namespace MikeSchweitzer.WebSocket.Internal
             var message = new WebSocketMessage(text);
             _incomingMessages.Enqueue(message);
         }
-        
+
         public void OnError(string errorMsg)
         {
             Error?.Invoke(errorMsg);
         }
-        
+
         public void OnClose(int closeCode)
         {
             Closed?.Invoke(WebSocketHelpers.ConvertCloseCode(closeCode));
@@ -221,7 +222,7 @@ namespace MikeSchweitzer.WebSocket.Internal
         private delegate void CloseCallback(int instanceId, int closeCode);
 
         [DllImport ("__Internal")]
-        private static extern int WebSocketAllocate(string url);
+        private static extern int WebSocketAllocate(string url, bool debugLogging);
         [DllImport ("__Internal")]
         private static extern void WebSocketAddSubprotocol(int instanceId, string subprotocol);
         [DllImport ("__Internal")]
@@ -245,15 +246,15 @@ namespace MikeSchweitzer.WebSocket.Internal
         #region Internal Properties
         private static Dictionary<int, WebGLWebSocket> Instances { get; } = new Dictionary<int, WebGLWebSocket>();
         #endregion
-        
+
         #region External Methods
         public static void Initialize()
         {
             if (IsInitialized)
                 return;
-            
+
             IsInitialized = true;
-            
+
             WebSocketSetOnOpen(OnOpen);
             WebSocketSetOnBinaryMessage(OnBinaryMessage);
             WebSocketSetOnTextMessage(OnTextMessage);
@@ -261,16 +262,16 @@ namespace MikeSchweitzer.WebSocket.Internal
             WebSocketSetOnClose(OnClose);
         }
 
-        public static int AddInstance(WebGLWebSocket instance, string url, IEnumerable<string> subprotocols)
+        public static int AddInstance(WebGLWebSocket instance, string url, IEnumerable<string> subprotocols, bool debugLogging)
         {
-            var instanceId = WebSocketAllocate(url);
+            var instanceId = WebSocketAllocate(url, debugLogging);
 
             if (subprotocols != null)
             {
                 foreach (var subprotocol in subprotocols)
                     WebSocketAddSubprotocol(instanceId, subprotocol);
             }
-            
+
             Instances.Add(instanceId, instance);
             return instanceId;
         }
@@ -288,7 +289,7 @@ namespace MikeSchweitzer.WebSocket.Internal
         {
             if (!Instances.TryGetValue(instanceId, out var instance))
                 return;
-            
+
             instance.OnOpen();
         }
 
@@ -297,7 +298,7 @@ namespace MikeSchweitzer.WebSocket.Internal
         {
             if (!Instances.TryGetValue(instanceId, out var instance))
                 return;
-            
+
             var bytes = new byte[messageLength];
             Marshal.Copy(messagePtr, bytes, 0, messageLength);
             instance.OnBinaryMessage(bytes);
@@ -308,7 +309,7 @@ namespace MikeSchweitzer.WebSocket.Internal
         {
             if (!Instances.TryGetValue(instanceId, out var instance))
                 return;
-            
+
             var text = Marshal.PtrToStringAuto(messagePtr);
             instance.OnTextMessage(text);
         }
@@ -318,7 +319,7 @@ namespace MikeSchweitzer.WebSocket.Internal
         {
             if (!Instances.TryGetValue(instanceId, out var instance))
                 return;
-            
+
             var errorMsg = Marshal.PtrToStringAuto(errorPtr);
             instance.OnError(errorMsg);
         }
@@ -328,7 +329,7 @@ namespace MikeSchweitzer.WebSocket.Internal
         {
             if (!Instances.TryGetValue(instanceId, out var instance))
                 return;
-            
+
             instance.OnClose(closeCode);
         }
         #endregion

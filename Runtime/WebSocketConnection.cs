@@ -15,25 +15,26 @@ namespace MikeSchweitzer.WebSocket
         public WebSocketConfig DesiredConfig { get; set; } = new WebSocketConfig();
         public WebSocketDesiredState DesiredState { get; private set; }
         #endregion
-        
+
         #region Current State Properties
         public string Url => Config?.Url;
         public WebSocketConfig Config { get; private set; }
         public WebSocketState State { get; private set; }
         public string ErrorMessage { get; private set; }
-        
+        public bool IsPinging => Config?.PingInterval != TimeSpan.Zero && Config?.PingMessage != null;
+
         // You probably don't need these and should use methods and events instead. These are
         // here if you really want to manipulate the underlying collections directly.
         public IEnumerable<WebSocketMessage> IncomingMessages => _incomingMessages;
         public IEnumerable<WebSocketMessage> OutgoingMessages => _outgoingMessages;
         #endregion
-        
+
         #region Public Events
         public delegate void StateChangedHandler(WebSocketConnection connection,
             WebSocketState oldState, WebSocketState newState);
         public delegate void MessageReceivedHandler(WebSocketConnection connection, WebSocketMessage message);
         public delegate void ErrorMessageReceivedHandler(WebSocketConnection connection, string errorMessage);
-        
+
         public event StateChangedHandler StateChanged;
         public event MessageReceivedHandler MessageReceived;
         public event ErrorMessageReceivedHandler ErrorMessageReceived;
@@ -43,6 +44,7 @@ namespace MikeSchweitzer.WebSocket
         private CancellationTokenSource _cts;
         private IWebSocket _webSocket;
         private Task _connectTask;
+        private DateTime _lastPingTimestamp;
         private readonly LinkedList<WebSocketMessage> _incomingMessages = new LinkedList<WebSocketMessage>();
         private readonly LinkedList<WebSocketMessage> _outgoingMessages = new LinkedList<WebSocketMessage>();
         #endregion
@@ -68,7 +70,7 @@ namespace MikeSchweitzer.WebSocket
                 DesiredState = WebSocketDesiredState.None;
                 return;
             }
-            
+
             DesiredState = WebSocketDesiredState.Disconnect;
         }
 
@@ -126,11 +128,11 @@ namespace MikeSchweitzer.WebSocket
 
         public static byte[] StringToBytes(string str) =>
             str == null ? null : Encoding.UTF8.GetBytes(str);
-        
+
         public static string BytesToString(byte[] bytes) =>
             bytes == null ? null : Encoding.UTF8.GetString(bytes);
         #endregion
-        
+
         #region Unity Methods
         private async void Awake()
         {
@@ -141,7 +143,7 @@ namespace MikeSchweitzer.WebSocket
         private void OnDestroy()
         {
             _cts.Cancel();
-            
+
             if (State == WebSocketState.Connecting || State == WebSocketState.Connected)
                 ChangeState(WebSocketState.Disconnecting);
         }
@@ -149,7 +151,7 @@ namespace MikeSchweitzer.WebSocket
         private void OnApplicationQuit()
         {
             _cts.Cancel();
-        
+
             if (State != WebSocketState.Connecting && State != WebSocketState.Connected)
                 return;
 
@@ -174,7 +176,7 @@ namespace MikeSchweitzer.WebSocket
 
                 if (_cts.IsCancellationRequested)
                     break;
-                
+
                 // process desired states second
                 if (DesiredState == WebSocketDesiredState.Connect)
                 {
@@ -183,7 +185,7 @@ namespace MikeSchweitzer.WebSocket
                     Config = DeepCopy(DesiredConfig);
                     ClearBuffers();
                     ChangeState(WebSocketState.Connecting);
-                    
+
                     await ShutdownWebSocketAsync();
                     try
                     {
@@ -198,7 +200,7 @@ namespace MikeSchweitzer.WebSocket
                 else if (DesiredState == WebSocketDesiredState.Disconnect)
                 {
                     DesiredState = WebSocketDesiredState.None;
-                    
+
                     if (State == WebSocketState.Connecting || State == WebSocketState.Connected)
                         ChangeState(WebSocketState.Disconnecting);
                 }
@@ -213,7 +215,7 @@ namespace MikeSchweitzer.WebSocket
             {
                 if (_cts.IsCancellationRequested)
                     break;
-                
+
                 if (_connectTask != null)
                     await _connectTask;
 
@@ -227,10 +229,10 @@ namespace MikeSchweitzer.WebSocket
             {
                 if (_cts.IsCancellationRequested)
                     break;
-                
+
                 if (_webSocket?.State == Internal.WebSocketState.Open)
                     _webSocket.ProcessIncomingMessages();
-                
+
                 await Task.Yield();
             }
         }
@@ -241,14 +243,25 @@ namespace MikeSchweitzer.WebSocket
             {
                 if (_cts.IsCancellationRequested)
                     break;
-                
+
+                if (_webSocket?.State == Internal.WebSocketState.Open && IsPinging)
+                {
+                    var now = DateTime.Now;
+                    var timeSinceLastPing = now - _lastPingTimestamp;
+                    if (timeSinceLastPing >= Config.PingInterval)
+                    {
+                        _webSocket.AddOutgoingMessage(Config.PingMessage);
+                        _lastPingTimestamp = now;
+                    }
+                }
+
                 while (_webSocket?.State == Internal.WebSocketState.Open && _outgoingMessages.First != null)
                 {
                     var message = _outgoingMessages.First.Value;
                     _outgoingMessages.RemoveFirst();
                     _webSocket.AddOutgoingMessage(message);
                 }
-                    
+
                 await Task.Yield();
             }
         }
@@ -261,12 +274,14 @@ namespace MikeSchweitzer.WebSocket
                 Config.Url,
                 Config.Subprotocols,
                 Config.Headers,
-                Config.MaxReceiveBytes);
+                Config.MaxReceiveBytes,
+                Config.CanDebugLog,
+                IsPinging);
             _webSocket.Opened += OnOpened;
             _webSocket.MessageReceived += OnMessageReceived;
             _webSocket.Closed += OnClosed;
             _webSocket.Error += OnError;
-            
+
             _connectTask = _webSocket.ConnectAsync();
         }
 
@@ -274,7 +289,7 @@ namespace MikeSchweitzer.WebSocket
         {
             if (_webSocket == null)
                 return;
-            
+
             if (_cts.IsCancellationRequested)
                 _webSocket.Cancel();
             else
@@ -297,7 +312,7 @@ namespace MikeSchweitzer.WebSocket
         private void OnWebSocketShutdown()
         {
             _connectTask = null;
-            
+
             _webSocket.Opened -= OnOpened;
             _webSocket.MessageReceived -= OnMessageReceived;
             _webSocket.Closed -= OnClosed;
@@ -307,11 +322,15 @@ namespace MikeSchweitzer.WebSocket
 
         private void OnOpened()
         {
+            _lastPingTimestamp = DateTime.Now;
             ChangeState(WebSocketState.Connected);
         }
 
         private void OnMessageReceived(WebSocketMessage message)
         {
+            if (IsPinging && message.Equals(Config.PingMessage))
+                return;
+
             _incomingMessages.AddLast(message);
             if (MessageReceived == null)
                 return;
@@ -336,7 +355,7 @@ namespace MikeSchweitzer.WebSocket
         {
             if (src == null)
                 return new WebSocketConfig();
-            
+
             return new WebSocketConfig
             {
                 Url = src.Url,
@@ -344,6 +363,9 @@ namespace MikeSchweitzer.WebSocket
                 Headers = src.Headers?.ToDictionary(pair => pair.Key, pair => pair.Value),
                 MaxReceiveBytes = src.MaxReceiveBytes,
                 MaxSendBytes = src.MaxSendBytes,
+                PingInterval = src.PingInterval,
+                PingMessage = src.PingMessage?.Clone(),
+                CanDebugLog = src.CanDebugLog,
             };
         }
 
@@ -357,7 +379,7 @@ namespace MikeSchweitzer.WebSocket
         {
             if (State == newState)
                 return;
-            
+
             var oldState = State;
             State = newState;
             StateChanged?.Invoke(this, oldState, newState);

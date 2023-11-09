@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace MikeSchweitzer.WebSocket
@@ -9,5 +10,8 @@ namespace MikeSchweitzer.WebSocket
         public Dictionary<string, string> Headers { get; set; }
         public int MaxReceiveBytes { get; set; } = 4096;
         public int MaxSendBytes { get; set; } = 4096;
+        public TimeSpan PingInterval { get; set; } = TimeSpan.Zero;
+        public WebSocketMessage PingMessage { get; set; } = new WebSocketMessage("hi");
+        public bool CanDebugLog { get; set; }
     }
 }

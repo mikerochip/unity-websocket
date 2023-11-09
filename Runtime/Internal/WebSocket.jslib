@@ -11,9 +11,7 @@ var LibraryWebSocket =
         onBinaryMessage: null,
         onTextMessage: null,
         onError: null,
-        onClose: null,
-
-        debug: false
+        onClose: null
     },
 
     WebSocketSetOnOpen: function(callback)
@@ -41,18 +39,22 @@ var LibraryWebSocket =
         webSocketState.onClose = callback;
     },
 
-    WebSocketAllocate: function(url)
+    WebSocketAllocate: function(url, debugLogging)
     {
         var urlStr = UTF8ToString(url);
-        var id = ++webSocketState.lastId;
+        var instanceId = ++webSocketState.lastId;
 
-        webSocketState.instances[id] = {
+        webSocketState.instances[instanceId] = {
             subprotocols: [],
             url: urlStr,
-            ws: null
+            ws: null,
+            debugLogging: debugLogging
         };
 
-        return id;
+        if (debugLogging)
+            console.log(`[JSLIB WebSocket] Instance ${instanceId}: allocated`);
+
+        return instanceId;
     },
 
     WebSocketAddSubprotocol: function(instanceId, subprotocol)
@@ -61,25 +63,18 @@ var LibraryWebSocket =
         webSocketState.instances[instanceId].subprotocols.push(subprotocolStr);
     },
 
-    /**
-     * Remove reference to WebSocket instance
-     *
-     * If socket is not closed function will close it but onClose event will not be emitted because
-     * this function should be invoked by C# WebSocket destructor.
-     *
-     * @param instanceId Instance ID
-     */
     WebSocketFree: function(instanceId)
     {
         var instance = webSocketState.instances[instanceId];
+        if (!instance)
+            return 0;
 
-        if (!instance) return 0;
+        if (instance.debugLogging)
+            console.log(`[JSLIB WebSocket] Instance ${instanceId}: freeing`);
 
-        // Close if not closed
         if (instance.ws && instance.ws.readyState < 2)
             instance.ws.close();
 
-        // Remove reference
         delete webSocketState.instances[instanceId];
 
         return 0;
@@ -100,8 +95,8 @@ var LibraryWebSocket =
 
         instance.ws.onopen = function()
         {
-            if (webSocketState.debug)
-                console.log("[JSLIB WebSocket] Connected");
+            if (instance.debugLogging)
+                console.log(`[JSLIB WebSocket] Instance ${instanceId}: connected`);
 
             if (webSocketState.onOpen)
                 Module.dynCall_vi(webSocketState.onOpen, instanceId);
@@ -109,8 +104,8 @@ var LibraryWebSocket =
 
         instance.ws.onmessage = function(ev)
         {
-            if (webSocketState.debug)
-                console.log(`[JSLIB WebSocket] Received message: ${ev.data}`);
+            if (instance.debugLogging)
+                console.log(`[JSLIB WebSocket] Instance ${instanceId}: received ${ev.data}`);
 
             if (ev.data instanceof ArrayBuffer)
             {
@@ -153,8 +148,8 @@ var LibraryWebSocket =
 
         instance.ws.onerror = function(ev)
         {
-            if (webSocketState.debug)
-                console.log("[JSLIB WebSocket] Error occured");
+            if (instance.debugLogging)
+                console.log(`[JSLIB WebSocket] Instance ${instanceId}: error occured`);
 
             if (webSocketState.onError)
             {
@@ -176,8 +171,8 @@ var LibraryWebSocket =
 
         instance.ws.onclose = function(ev)
         {
-            if (webSocketState.debug)
-                console.log("[JSLIB WebSocket] Closed");
+            if (instance.debugLogging)
+                console.log(`[JSLIB WebSocket] Instance ${instanceId}: closed with code ${ev.code}`);
 
             if (webSocketState.onClose)
                 Module.dynCall_vii(webSocketState.onClose, instanceId, ev.code);

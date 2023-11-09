@@ -19,7 +19,7 @@ namespace MikeSchweitzer.WebSocket.Internal
         Task CloseAsync();
         void Cancel();
     }
-    
+
     internal delegate void OpenedHandler();
     internal delegate void MessageReceivedHandler(WebSocketMessage message);
     internal delegate void ErrorHandler(string errorMessage);
@@ -64,18 +64,20 @@ namespace MikeSchweitzer.WebSocket.Internal
         public static IWebSocket CreateWebSocket(
             string url,
             IEnumerable<string> subprotocols,
-            Dictionary<string, string> headers = null,
-            int maxReceiveBytes = 4096)
+            Dictionary<string, string> headers,
+            int maxReceiveBytes,
+            bool debugLogging,
+            bool suppressDotNetKeepAlive)
         {
             var uri = new Uri(url);
             var protocol = uri.Scheme;
             if (!protocol.Equals("ws") && !protocol.Equals("wss"))
                 throw new ArgumentException($"Unsupported protocol: {protocol}");
-            
+
             #if !UNITY_WEBGL || UNITY_EDITOR
-                return new DotNetWebSocket(uri, subprotocols, headers, maxReceiveBytes);
+                return new DotNetWebSocket(uri, subprotocols, headers, maxReceiveBytes, debugLogging, suppressDotNetKeepAlive);
             #else
-                return new WebGLWebSocket(uri, subprotocols, maxReceiveBytes);
+                return new WebGLWebSocket(uri, subprotocols, maxReceiveBytes, debugLogging);
             #endif
         }
     }

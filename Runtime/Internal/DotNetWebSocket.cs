@@ -18,8 +18,8 @@ namespace MikeSchweitzer.WebSocket.Internal
         private readonly List<string> _subprotocols;
         private readonly Dictionary<string, string> _headers;
         private readonly int _maxReceiveBytes;
-        private readonly int _connectTimeoutMs;
-        
+        private readonly bool _suppressKeepAlive;
+
         private CancellationTokenSource _cancellationTokenSource;
         private CancellationToken _cancellationToken;
         private ClientWebSocket _socket;
@@ -66,14 +66,17 @@ namespace MikeSchweitzer.WebSocket.Internal
         public DotNetWebSocket(
             Uri uri,
             IEnumerable<string> subprotocols,
-            Dictionary<string, string> headers = null,
-            int maxReceiveBytes = 4096)
+            Dictionary<string, string> headers,
+            int maxReceiveBytes,
+            bool debugLogging,
+            bool suppressKeepAlive)
         {
             _uri = uri;
             _subprotocols = subprotocols?.ToList();
             _headers = headers?.ToDictionary(pair => pair.Key, pair => pair.Value);
             _maxReceiveBytes = maxReceiveBytes;
-            
+            _suppressKeepAlive = suppressKeepAlive;
+
             _cancellationTokenSource = new CancellationTokenSource();
             _cancellationToken = _cancellationTokenSource.Token;
         }
@@ -112,6 +115,10 @@ namespace MikeSchweitzer.WebSocket.Internal
         public async Task ConnectAsync()
         {
             _socket = new ClientWebSocket();
+
+            if (_suppressKeepAlive)
+                _socket.Options.KeepAliveInterval = TimeSpan.Zero;
+
             try
             {
                 if (_subprotocols != null)
@@ -142,8 +149,8 @@ namespace MikeSchweitzer.WebSocket.Internal
                     ? WebSocketCloseCode.Abnormal
                     : WebSocketHelpers.ConvertCloseCode((int)_socket.CloseStatus);
                 Closed?.Invoke(closeCode);
-                
-                _cancellationTokenSource = new CancellationTokenSource(_connectTimeoutMs);
+
+                _cancellationTokenSource = new CancellationTokenSource();
                 _cancellationToken = _cancellationTokenSource.Token;
                 _socket?.Dispose();
                 _socket = null;
@@ -154,13 +161,13 @@ namespace MikeSchweitzer.WebSocket.Internal
         {
             if (_socket == null)
                 return;
-            
+
             switch (_socket.State)
             {
                 case System.Net.WebSockets.WebSocketState.Open:
                     await _socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None);
                     break;
-                
+
                 case System.Net.WebSockets.WebSocketState.Connecting:
                     _cancellationTokenSource.Cancel();
                     break;
@@ -171,7 +178,7 @@ namespace MikeSchweitzer.WebSocket.Internal
         {
             if (_socket == null)
                 return;
-            
+
             _cancellationTokenSource.Cancel();
         }
         #endregion
@@ -191,7 +198,7 @@ namespace MikeSchweitzer.WebSocket.Internal
                 await new WaitForMainThreadUpdate();
             }
         }
-        
+
         private async Task ReceiveAsync()
         {
             var buffer = new ArraySegment<byte>(new byte[_maxReceiveBytes]);
@@ -204,7 +211,7 @@ namespace MikeSchweitzer.WebSocket.Internal
                     do
                     {
                         result = await _socket.ReceiveAsync(buffer, _cancellationToken);
-                        
+
                         byteCount += result.Count;
                         if (byteCount > _maxReceiveBytes)
                         {
@@ -215,7 +222,7 @@ namespace MikeSchweitzer.WebSocket.Internal
 
                         if (result.CloseStatus != null)
                             break;
-                        
+
                         ms.Write(buffer.Array, buffer.Offset, result.Count);
                     }
                     while (!result.EndOfMessage);
@@ -234,7 +241,7 @@ namespace MikeSchweitzer.WebSocket.Internal
 
                     ms.Seek(0, SeekOrigin.Begin);
                     var bytes = ms.ToArray();
-                    
+
                     WebSocketMessage message;
                     if (result.MessageType == WebSocketMessageType.Binary)
                     {
@@ -262,7 +269,7 @@ namespace MikeSchweitzer.WebSocket.Internal
                 {
                     if (_outgoingMessages.Count == 0)
                         continue;
-                    
+
                     message = _outgoingMessages.Dequeue();
                 }
 
@@ -275,7 +282,7 @@ namespace MikeSchweitzer.WebSocket.Internal
         }
         #endregion
     }
-    
+
     internal class MainThreadAsyncAwaitRunner : MonoBehaviour
     {
         private static MainThreadAsyncAwaitRunner Instance { get; set; }
