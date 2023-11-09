@@ -1,6 +1,6 @@
 # WebSocket Client for Unity
 
-[![Unity Version](https://img.shields.io/badge/Unity-2019.1%2B-blueviolet?logo=unity)](https://unity.com/releases/editor/archive)
+[![Unity Version](https://img.shields.io/badge/Unity-2021.2%2B-blueviolet?logo=unity)](https://unity.com/releases/editor/archive)
 
 `WebSocketConnection` is an easy-to-use WebSocket client for Unity that Just Works
 

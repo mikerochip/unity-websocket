@@ -4,11 +4,12 @@
   "displayName": "WebSocket Client",
   "description": "Simple, flexible WebSocket client. Add the WebSocketConnection MonoBehaviour anywhere in your scene.",
   "license": "Apache 2.0",
-  "unity": "2019.1",
+  "unity": "2021.2",
   "keywords": [
     "web",
     "socket",
-    "websocket"
+    "websocket",
+    "ws"
   ],
   "author": {
     "name": "Mike Schweitzer",
