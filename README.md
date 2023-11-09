@@ -8,8 +8,7 @@
 
 * Easy to use
    * `WebSocketConnection` is just a `MonoBehaviour`
-   * Doesn't force you to use `async/await` or `Coroutines` - use whatever you want
-   * Add event listeners or poll the component, it's up to you
+   * Doesn't force you to use `async/await`: use event listeners, coroutines, or polling
    * Public API prevents you from corrupting an active connection
    * Reusable: connect, disconnect, change URL, connect again, etc
 * Flexible config
@@ -19,25 +18,24 @@
 * Wide platform support
    * No external install requirements or dependencies
    * `string` is treated as text and `byte[]` as binary (some servers care)
-   * Universal ping-pong support for servers that enforce idle timeouts
+   * Customizable ping-pong support for servers that enforce idle timeouts
    * WebGL uses a bundled JavaScript lib `WebSocket.jslib`
    * Other platforms use the built-in `System.Net.WebSockets`
 
 # Install
 
-See official instructions for how to [Install a Package from a Git URL](https://docs.unity3d.com/Manual/upm-ui-giturl.html)
+See official instructions for how to [Install a Package from a Git URL](https://docs.unity3d.com/Manual/upm-ui-giturl.html). The URL is
 
-The URL is https://github.com/mikerochip/unity-websocket.git
+`https://github.com/mikerochip/unity-websocket.git`
 
-# ⚠️ Disclaimers ⚠️
+# ⚠️ Known Limitations ⚠️
 
-* You may only add outgoing messages in the `Connected` state. An error will happen otherwise.
-* Headers aren't supported for WebGL because the JavaScript [WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) doesn't support them
+* Headers aren't supported in WebGL because the JavaScript [WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) doesn't support them
    * See [this StackOverflow issue](https://stackoverflow.com/questions/4361173/http-headers-in-websockets-client-api) for more.
 * You can't bypass server certificate validation when connecting to a secure websocket endpoint (`wss`). That means the endpoint must have a CA-verifiable SSL certificate, it can't have no certs installed or only self-signed certs.
    * For WebGL, this is due to a limitation in the JavaScript WebSocket API
-   * For non-WebGL, this is due to a bug in Unity's mono runtime
-   * There is an [active issue](https://github.com/mikerochip/unity-websocket/issues/7) to address this, but no timeframe for resolution currently.
+   * For .NET, this is due to a bug in Unity's mono runtime
+   * There is an [active issue](https://github.com/mikerochip/unity-websocket/issues/7) to address this, but no timeframe for resolution, currently.
 
 # Samples
 
@@ -256,13 +254,9 @@ private async Task ReceiveMessagesAsync()
 }
 ```
 
-## Universal Ping-Pong Support
+## Customizable Ping-Pong Support
 
-WebGL (JavaScript) has no built-in ping-pong support, unlike .NET.
-
-Configuring this will work on both platforms.
-
-⚠️ You must code your server to ignore or echo messages of the same message type (text or binary) and content.
+WebGL (JavaScript) has no built-in ping-pong support, unlike .NET. Configuring this will make pings work on both platforms.
 
 ```CSharp
 _Connection.DesiredConfig = new WebSocketConfig
@@ -271,6 +265,8 @@ _Connection.DesiredConfig = new WebSocketConfig
     PingMessage = new WebSocketMessage("foo"),
 };
 ```
+
+⚠️ Your server must ignore or echo messages of the same message type (text or binary) and content.
 
 # Attribution
 
