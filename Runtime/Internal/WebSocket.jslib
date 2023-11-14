@@ -52,7 +52,7 @@ var LibraryWebSocket =
         };
 
         if (debugLogging)
-            console.log(`[JSLIB WebSocket] Instance ${instanceId}: allocated`);
+            console.log("[JSLIB WebSocket] Instance " + instanceId + ": allocated");
 
         return instanceId;
     },
@@ -70,7 +70,7 @@ var LibraryWebSocket =
             return 0;
 
         if (instance.debugLogging)
-            console.log(`[JSLIB WebSocket] Instance ${instanceId}: freeing`);
+            console.log("[JSLIB WebSocket] Instance " + instanceId + ": freeing");
 
         if (instance.ws && instance.ws.readyState < 2)
             instance.ws.close();
@@ -96,7 +96,7 @@ var LibraryWebSocket =
         instance.ws.onopen = function()
         {
             if (instance.debugLogging)
-                console.log(`[JSLIB WebSocket] Instance ${instanceId}: connected`);
+                console.log("[JSLIB WebSocket] Instance " + instanceId + "}: connected");
 
             if (webSocketState.onOpen)
                 Module.dynCall_vi(webSocketState.onOpen, instanceId);
@@ -105,7 +105,7 @@ var LibraryWebSocket =
         instance.ws.onmessage = function(ev)
         {
             if (instance.debugLogging)
-                console.log(`[JSLIB WebSocket] Instance ${instanceId}: received ${ev.data}`);
+                console.log("[JSLIB WebSocket] Instance " + instanceId + ": received " + ev.data);
 
             if (ev.data instanceof ArrayBuffer)
             {
@@ -149,7 +149,7 @@ var LibraryWebSocket =
         instance.ws.onerror = function(ev)
         {
             if (instance.debugLogging)
-                console.log(`[JSLIB WebSocket] Instance ${instanceId}: error occured`);
+                console.log("[JSLIB WebSocket] Instance " + instanceId + ": error occured");
 
             if (webSocketState.onError)
             {
@@ -172,7 +172,7 @@ var LibraryWebSocket =
         instance.ws.onclose = function(ev)
         {
             if (instance.debugLogging)
-                console.log(`[JSLIB WebSocket] Instance ${instanceId}: closed with code ${ev.code}`);
+                console.log("[JSLIB WebSocket] Instance " + instanceId + ": closed with code " + ev.code);
 
             if (webSocketState.onClose)
                 Module.dynCall_vii(webSocketState.onClose, instanceId, ev.code);

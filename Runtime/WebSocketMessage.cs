@@ -13,8 +13,8 @@ namespace MikeSchweitzer.WebSocket
     {
         #region Public Properties
         public WebSocketDataType Type { get; }
-        public byte[] Bytes => _bytes ?? (_stringAsBytes ??= WebSocketConnection.StringToBytes(_string));
-        public string String => _string ?? (_bytesAsString ??= WebSocketConnection.BytesToString(_bytes));
+        public byte[] Bytes => _bytes ??(_stringAsBytes ?? (_stringAsBytes = WebSocketConnection.StringToBytes(_string)));
+        public string String => _string ?? (_bytesAsString ?? (_bytesAsString = WebSocketConnection.BytesToString(_bytes)));
         #endregion
 
         #region Private Fields
@@ -83,10 +83,10 @@ namespace MikeSchweitzer.WebSocket
             switch (Type)
             {
                 case WebSocketDataType.Binary:
-                    return HashCode.Combine(Type, _bytes);
+                    return (Type, _bytes).GetHashCode();
 
                 case WebSocketDataType.Text:
-                    return HashCode.Combine(Type, _string);
+                    return (Type, _string).GetHashCode();
 
                 default:
                     throw new NotImplementedException($"Unhandled WebSocketDataType {Type}");
