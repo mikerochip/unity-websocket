@@ -1,3 +1,4 @@
+#if UNITY_WEBGL || UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
@@ -335,3 +336,4 @@ namespace MikeSchweitzer.WebSocket.Internal
         #endregion
     }
 }
+#endif
