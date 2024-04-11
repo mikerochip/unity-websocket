@@ -231,7 +231,7 @@ var LibraryWebSocket =
             return instance.ws.readyState;
         else
             return -3;
-    }
+    },
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // Instance Events
@@ -259,7 +259,7 @@ var LibraryWebSocket =
     WebSocketSetErrorCallback: function(callback)
     {
         webSocketState.errorCallback = callback;
-    },
+    }
 };
 
 autoAddDeps(LibraryWebSocket, '$webSocketState');
