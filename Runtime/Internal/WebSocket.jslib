@@ -7,8 +7,7 @@ var LibraryWebSocket =
     $webSocketState:
     {
         instances: {},
-
-        lastId: 0,
+        nextInstanceId: 1,
 
         openCallback: null,
         binaryMessageCallback: null,
@@ -20,9 +19,10 @@ var LibraryWebSocket =
     WebSocketNew: function(url, debugLogging)
     {
         var urlStr = UTF8ToString(url);
-        var instanceId = ++webSocketState.lastId;
+        var instanceId = webSocketState.nextInstanceId++;
 
-        webSocketState.instances[instanceId] = {
+        webSocketState.instances[instanceId] =
+        {
             subprotocols: [],
             url: urlStr,
             ws: null,
@@ -80,7 +80,12 @@ var LibraryWebSocket =
                 console.log("[JSLIB WebSocket] Instance " + instanceId + ": connected");
 
             if (webSocketState.openCallback)
-                Module.dynCall_vi(webSocketState.openCallback, instanceId);
+            {
+                if (dynCall)
+                    Module.dynCall_vi(webSocketState.openCallback, instanceId);
+                else
+                    {{{ makeDynCall('vi', 'webSocketState.openCallback') }}}(instanceId)
+            }
         };
 
         instance.ws.onmessage = function(event)
@@ -100,7 +105,10 @@ var LibraryWebSocket =
 
                 try
                 {
-                    Module.dynCall_viii(webSocketState.binaryMessageCallback, instanceId, buffer, dataBuffer.length);
+                    if (dynCall)
+                        Module.dynCall_viii(webSocketState.binaryMessageCallback, instanceId, buffer, dataBuffer.length);
+                    else
+                        {{{ makeDynCall('viii', 'webSocketState.binaryMessageCallback') }}}(instanceId, buffer, dataBuffer.length)
                 }
                 finally
                 {
@@ -118,7 +126,10 @@ var LibraryWebSocket =
 
                 try
                 {
-                    Module.dynCall_vii(webSocketState.textMessageCallback, instanceId, buffer);
+                    if (dynCall)
+                        Module.dynCall_vii(webSocketState.textMessageCallback, instanceId, buffer);
+                    else
+                        {{{ makeDynCall('vii', 'webSocketState.textMessageCallback') }}}(instanceId, buffer)
                 }
                 finally
                 {
@@ -137,7 +148,10 @@ var LibraryWebSocket =
 
             try
             {
-                Module.dynCall_vi(webSocketState.errorCallback, instanceId);
+                if (dynCall)
+                    Module.dynCall_vi(webSocketState.errorCallback, instanceId);
+                else
+                    {{{ makeDynCall('vi', 'webSocketState.errorCallback') }}}(instanceId)
             }
             finally
             {
@@ -151,7 +165,12 @@ var LibraryWebSocket =
                 console.log("[JSLIB WebSocket] Instance " + instanceId + ": closed with code " + event.code);
 
             if (webSocketState.closeCallback)
-                Module.dynCall_vii(webSocketState.closeCallback, instanceId, event.code);
+            {
+                if (dynCall)
+                    Module.dynCall_vii(webSocketState.closeCallback, instanceId, event.code);
+                else
+                    {{{ makeDynCall('vii', 'webSocketState.closeCallback') }}}(instanceId, event.code)
+            }
 
             delete instance.ws;
         };
