@@ -15,13 +15,16 @@ namespace MikeSchweitzer.WebSocket.Internal
         // incoming message buffering isn't strictly necessary, it's for API consistency with
         // the System.Net.WebSockets path
         private readonly Queue<WebSocketMessage> _incomingMessages = new Queue<WebSocketMessage>();
+
+        private static bool _globalInitialized;
+        private static Dictionary<int, WebGLWebSocket> _globalInstanceMap = new Dictionary<int, WebGLWebSocket>();
         #endregion
 
         #region IWebSocket Events
         public event OpenedHandler Opened;
         public event MessageReceivedHandler MessageReceived;
-        public event ErrorHandler Error;
         public event ClosedHandler Closed;
+        public event ErrorHandler Error;
         #endregion
 
         #region IWebSocket Properties
@@ -32,7 +35,7 @@ namespace MikeSchweitzer.WebSocket.Internal
                 var state = JsLibBridge.GetState(_instanceId);
 
                 if (state < 0)
-                    Error?.Invoke(ErrorCodeToMessage(state));
+                    Error?.Invoke(JsLibBridge.TranslateCustomErrorState(state));
 
                 // see https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/readyState
                 switch (state)
@@ -59,16 +62,18 @@ namespace MikeSchweitzer.WebSocket.Internal
             int maxReceiveBytes,
             bool canDebugLog)
         {
+            GlobalInitialize();
+
             _maxReceiveBytes = maxReceiveBytes;
 
-            JsLibBridge.Initialize();
-
-            _instanceId = JsLibBridge.Allocate(this, uri.AbsoluteUri, subprotocols, canDebugLog);
+            _instanceId = JsLibBridge.New(uri.AbsoluteUri, subprotocols, canDebugLog);
+            _globalInstanceMap.Add(_instanceId, this);
         }
 
         ~WebGLWebSocket()
         {
-            JsLibBridge.Free(_instanceId);
+            _globalInstanceMap.Remove(_instanceId);
+            JsLibBridge.Delete(_instanceId);
         }
         #endregion
 
@@ -87,22 +92,21 @@ namespace MikeSchweitzer.WebSocket.Internal
 
         public Task ConnectAsync()
         {
-            var ret = JsLibBridge.Connect(_instanceId);
-
-            if (ret < 0)
-                Error?.Invoke(ErrorCodeToMessage(ret));
+            var state = JsLibBridge.Connect(_instanceId);
+            if (state < 0)
+                Error?.Invoke(JsLibBridge.TranslateCustomErrorState(state));
 
             return Task.CompletedTask;
         }
 
         public void AddOutgoingMessage(WebSocketMessage message)
         {
-            var ret = message.Type == WebSocketDataType.Binary
+            var state = message.Type == WebSocketDataType.Binary
                 ? JsLibBridge.SendBinary(_instanceId, message.Bytes)
                 : JsLibBridge.SendText(_instanceId, message.String);
 
-            if (ret < 0)
-                Error?.Invoke(ErrorCodeToMessage(ret));
+            if (state < 0)
+                Error?.Invoke(JsLibBridge.TranslateCustomErrorState(state));
         }
 
         public Task CloseAsync()
@@ -114,10 +118,9 @@ namespace MikeSchweitzer.WebSocket.Internal
                     return Task.CompletedTask;
             }
 
-            var ret = JsLibBridge.Close(_instanceId, (int)WebSocketCloseCode.Normal);
-
-            if (ret < 0)
-                Error?.Invoke(ErrorCodeToMessage(ret));
+            var state = JsLibBridge.Close(_instanceId, (int)WebSocketCloseCode.Normal);
+            if (state < 0)
+                Error?.Invoke(JsLibBridge.TranslateCustomErrorState(state));
 
             return Task.CompletedTask;
         }
@@ -131,17 +134,102 @@ namespace MikeSchweitzer.WebSocket.Internal
                     return;
             }
 
-            var ret = JsLibBridge.Close(_instanceId, (int)WebSocketCloseCode.Normal);
-
-            if (ret < 0)
-                Error?.Invoke(ErrorCodeToMessage(ret));
+            var state = JsLibBridge.Close(_instanceId, (int)WebSocketCloseCode.Normal);
+            if (state < 0)
+                Error?.Invoke(JsLibBridge.TranslateCustomErrorState(state));
         }
         #endregion
 
-        #region Internal Methods
-        private static string ErrorCodeToMessage(int errorCode)
+        #region Global Management
+        private static void GlobalInitialize()
         {
-            switch (errorCode)
+            if (_globalInitialized)
+                return;
+
+            _globalInitialized = true;
+
+            JsLibBridge.Initialize();
+
+            JsLibBridge.Opened += OnOpened;
+            JsLibBridge.BinaryMessageReceived += OnBinaryMessageReceived;
+            JsLibBridge.TextMessageReceived += OnTextMessageReceived;
+            JsLibBridge.Closed += OnClosed;
+            JsLibBridge.Error += OnError;
+        }
+        #endregion
+
+        #region Instance Events
+        private static void OnOpened(int instanceId)
+        {
+            if (!_globalInstanceMap.TryGetValue(instanceId, out var instance))
+                return;
+
+            instance.Opened?.Invoke();
+        }
+
+        private static void OnBinaryMessageReceived(int instanceId, byte[] bytes)
+        {
+            if (!_globalInstanceMap.TryGetValue(instanceId, out var instance))
+                return;
+
+            if (bytes.Length > instance._maxReceiveBytes)
+                return;
+
+            var message = new WebSocketMessage(bytes);
+            instance._incomingMessages.Enqueue(message);
+        }
+
+        private static void OnTextMessageReceived(int instanceId, string text)
+        {
+            if (!_globalInstanceMap.TryGetValue(instanceId, out var instance))
+                return;
+
+            var bytes = System.Text.Encoding.UTF8.GetBytes(text);
+            if (bytes.Length > instance._maxReceiveBytes)
+                return;
+
+            var message = new WebSocketMessage(text);
+            instance._incomingMessages.Enqueue(message);
+        }
+
+        private static void OnClosed(int instanceId, int closeCode)
+        {
+            if (!_globalInstanceMap.TryGetValue(instanceId, out var instance))
+                return;
+
+            instance.Closed?.Invoke(WebSocketHelpers.ConvertCloseCode(closeCode));
+        }
+
+        private static void OnError(int instanceId)
+        {
+            if (!_globalInstanceMap.TryGetValue(instanceId, out var instance))
+                return;
+
+            instance.Error?.Invoke("WebSocket error");
+        }
+        #endregion
+    }
+
+    internal static class JsLibBridge
+    {
+        #region Global Properties
+        private static bool IsInitialized { get; set; }
+        #endregion
+
+        #region Global Methods
+        public static void Initialize()
+        {
+            if (IsInitialized)
+                return;
+
+            IsInitialized = true;
+
+            InstallInstanceEventCallbacks();
+        }
+
+        public static string TranslateCustomErrorState(int state)
+        {
+            switch (state)
             {
                 case -1:
                     return "WebSocket not created";
@@ -163,114 +251,10 @@ namespace MikeSchweitzer.WebSocket.Internal
         }
         #endregion
 
-        #region JsLibBridge Event Helpers
-        public void OnOpen()
+        #region Instance Management
+        public static int New(string url, IEnumerable<string> subprotocols, bool debugLogging)
         {
-            Opened?.Invoke();
-        }
-
-        public void OnBinaryMessage(byte[] bytes)
-        {
-            if (bytes.Length > _maxReceiveBytes)
-                return;
-
-            var message = new WebSocketMessage(bytes);
-            _incomingMessages.Enqueue(message);
-        }
-
-        public void OnTextMessage(string text)
-        {
-            var bytes = System.Text.Encoding.UTF8.GetBytes(text);
-            if (bytes.Length > _maxReceiveBytes)
-                return;
-
-            var message = new WebSocketMessage(text);
-            _incomingMessages.Enqueue(message);
-        }
-
-        public void OnError(string errorMsg)
-        {
-            Error?.Invoke(errorMsg);
-        }
-
-        public void OnClose(int closeCode)
-        {
-            Closed?.Invoke(WebSocketHelpers.ConvertCloseCode(closeCode));
-        }
-        #endregion
-    }
-
-    internal static class JsLibBridge
-    {
-        #region Marshaled Callback Types
-        private delegate void OpenCallback(int instanceId);
-        private delegate void BinaryMessageCallback(int instanceId, IntPtr messagePtr, int messageLength);
-        private delegate void TextMessageCallback(int instanceId, IntPtr messagePtr);
-        private delegate void ErrorCallback(int instanceId, IntPtr errorPtr);
-        private delegate void CloseCallback(int instanceId, int closeCode);
-        #endregion
-
-        #region Marshaled Methods
-        [DllImport ("__Internal")]
-        private static extern int WebSocketAllocate(string url, bool debugLogging);
-        [DllImport ("__Internal")]
-        private static extern void WebSocketAddSubprotocol(int instanceId, string subprotocol);
-        [DllImport ("__Internal")]
-        private static extern void WebSocketFree(int instanceId);
-
-        [DllImport("__Internal")]
-        private static extern int WebSocketConnect(int instanceId);
-        [DllImport("__Internal")]
-        private static extern int WebSocketClose(int instanceId, int code);
-        [DllImport("__Internal")]
-        private static extern int WebSocketSendBinary(int instanceId, byte[] bytes, int length);
-        [DllImport("__Internal")]
-        private static extern int WebSocketSendText(int instanceId, string message);
-        [DllImport("__Internal")]
-        private static extern int WebSocketGetState(int instanceId);
-        #endregion
-
-        #region Marshaled Callback Setters
-        [DllImport ("__Internal")]
-        private static extern void WebSocketSetOnOpen(OpenCallback callback);
-        [DllImport ("__Internal")]
-        private static extern void WebSocketSetOnBinaryMessage(BinaryMessageCallback callback);
-        [DllImport ("__Internal")]
-        private static extern void WebSocketSetOnTextMessage(TextMessageCallback callback);
-        [DllImport ("__Internal")]
-        private static extern void WebSocketSetOnError(ErrorCallback callback);
-        [DllImport ("__Internal")]
-        private static extern void WebSocketSetOnClose(CloseCallback callback);
-        #endregion
-
-        #region Public Properties
-        public static bool IsInitialized { get; private set; }
-        #endregion
-
-        #region Private Properties
-        private static Dictionary<int, WebGLWebSocket> Instances { get; } = new Dictionary<int, WebGLWebSocket>();
-        #endregion
-
-        #region Public Methods
-        public static void Initialize()
-        {
-            if (IsInitialized)
-                return;
-
-            IsInitialized = true;
-
-            WebSocketSetOnOpen(OnOpen);
-            WebSocketSetOnBinaryMessage(OnBinaryMessage);
-            WebSocketSetOnTextMessage(OnTextMessage);
-            WebSocketSetOnError(OnError);
-            WebSocketSetOnClose(OnClose);
-        }
-        #endregion
-
-        #region Wrappers for Marshaled Methods
-        public static int Allocate(WebGLWebSocket instance, string url, IEnumerable<string> subprotocols, bool debugLogging)
-        {
-            var instanceId = WebSocketAllocate(url, debugLogging);
+            var instanceId = WebSocketNew(url, debugLogging);
 
             if (subprotocols != null)
             {
@@ -278,16 +262,16 @@ namespace MikeSchweitzer.WebSocket.Internal
                     WebSocketAddSubprotocol(instanceId, subprotocol);
             }
 
-            Instances.Add(instanceId, instance);
             return instanceId;
         }
 
-        public static void Free(int instanceId)
+        public static void Delete(int instanceId)
         {
-            Instances.Remove(instanceId);
-            WebSocketFree(instanceId);
+            WebSocketDelete(instanceId);
         }
+        #endregion
 
+        #region Instance API
         public static int Connect(int instanceId)
         {
             return WebSocketConnect(instanceId);
@@ -314,54 +298,100 @@ namespace MikeSchweitzer.WebSocket.Internal
         }
         #endregion
 
-        #region Handlers for Marshaled Callbacks
-        [MonoPInvokeCallback(typeof(OpenCallback))]
-        private static void OnOpen(int instanceId)
-        {
-            if (!Instances.TryGetValue(instanceId, out var instance))
-                return;
+        #region Instance Events
+        public delegate void OpenedHandler(int instanceId);
+        public delegate void BinaryMessageReceivedHandler(int instanceId, byte[] bytes);
+        public delegate void TextMessageReceivedHandler(int instanceId, string text);
+        public delegate void ClosedHandler(int instanceId, int closeCode);
+        public delegate void ErrorHandler(int instanceId);
 
-            instance.OnOpen();
+        public static event OpenedHandler Opened;
+        public static event BinaryMessageReceivedHandler BinaryMessageReceived;
+        public static event TextMessageReceivedHandler TextMessageReceived;
+        public static event ClosedHandler Closed;
+        public static event ErrorHandler Error;
+        #endregion
+
+        #region Marshaled Instance Management
+        [DllImport ("__Internal")]
+        private static extern int WebSocketNew(string url, bool debugLogging);
+        [DllImport ("__Internal")]
+        private static extern void WebSocketAddSubprotocol(int instanceId, string subprotocol);
+        [DllImport ("__Internal")]
+        private static extern void WebSocketDelete(int instanceId);
+        #endregion
+
+        #region Marshaled Instance API
+        [DllImport("__Internal")]
+        private static extern int WebSocketConnect(int instanceId);
+        [DllImport("__Internal")]
+        private static extern int WebSocketClose(int instanceId, int code);
+        [DllImport("__Internal")]
+        private static extern int WebSocketSendBinary(int instanceId, byte[] bytes, int length);
+        [DllImport("__Internal")]
+        private static extern int WebSocketSendText(int instanceId, string message);
+        [DllImport("__Internal")]
+        private static extern int WebSocketGetState(int instanceId);
+        #endregion
+
+        #region Marshaled Instance Events
+        private delegate void JsOpenCallback(int instanceId);
+        private delegate void JsBinaryMessageCallback(int instanceId, IntPtr messagePtr, int messageLength);
+        private delegate void JsTextMessageCallback(int instanceId, IntPtr messagePtr);
+        private delegate void JsCloseCallback(int instanceId, int closeCode);
+        private delegate void JsErrorCallback(int instanceId);
+
+        [DllImport ("__Internal")]
+        private static extern void WebSocketSetOpenCallback(JsOpenCallback callback);
+        [DllImport ("__Internal")]
+        private static extern void WebSocketSetBinaryMessageCallback(JsBinaryMessageCallback callback);
+        [DllImport ("__Internal")]
+        private static extern void WebSocketSetTextMessageCallback(JsTextMessageCallback callback);
+        [DllImport ("__Internal")]
+        private static extern void WebSocketSetCloseCallback(JsCloseCallback callback);
+        [DllImport ("__Internal")]
+        private static extern void WebSocketSetErrorCallback(JsErrorCallback callback);
+
+        private static void InstallInstanceEventCallbacks()
+        {
+            WebSocketSetOpenCallback(JsOnOpen);
+            WebSocketSetBinaryMessageCallback(JsOnBinaryMessage);
+            WebSocketSetTextMessageCallback(JsOnTextMessage);
+            WebSocketSetErrorCallback(JsOnError);
+            WebSocketSetCloseCallback(JsOnClose);
         }
 
-        [MonoPInvokeCallback(typeof(BinaryMessageCallback))]
-        private static void OnBinaryMessage(int instanceId, IntPtr messagePtr, int messageLength)
+        [MonoPInvokeCallback(typeof(JsOpenCallback))]
+        private static void JsOnOpen(int instanceId)
         {
-            if (!Instances.TryGetValue(instanceId, out var instance))
-                return;
+            Opened?.Invoke(instanceId);
+        }
 
+        [MonoPInvokeCallback(typeof(JsBinaryMessageCallback))]
+        private static void JsOnBinaryMessage(int instanceId, IntPtr messagePtr, int messageLength)
+        {
             var bytes = new byte[messageLength];
             Marshal.Copy(messagePtr, bytes, 0, messageLength);
-            instance.OnBinaryMessage(bytes);
+            BinaryMessageReceived?.Invoke(instanceId, bytes);
         }
 
-        [MonoPInvokeCallback(typeof(TextMessageCallback))]
-        private static void OnTextMessage(int instanceId, IntPtr messagePtr)
+        [MonoPInvokeCallback(typeof(JsTextMessageCallback))]
+        private static void JsOnTextMessage(int instanceId, IntPtr messagePtr)
         {
-            if (!Instances.TryGetValue(instanceId, out var instance))
-                return;
-
             var text = Marshal.PtrToStringAuto(messagePtr);
-            instance.OnTextMessage(text);
+            TextMessageReceived?.Invoke(instanceId, text);
         }
 
-        [MonoPInvokeCallback(typeof(ErrorCallback))]
-        private static void OnError(int instanceId, IntPtr errorPtr)
+        [MonoPInvokeCallback(typeof(JsCloseCallback))]
+        private static void JsOnClose(int instanceId, int closeCode)
         {
-            if (!Instances.TryGetValue(instanceId, out var instance))
-                return;
-
-            var errorMsg = Marshal.PtrToStringAuto(errorPtr);
-            instance.OnError(errorMsg);
+            Closed?.Invoke(instanceId, closeCode);
         }
 
-        [MonoPInvokeCallback(typeof(CloseCallback))]
-        private static void OnClose(int instanceId, int closeCode)
+        [MonoPInvokeCallback(typeof(JsErrorCallback))]
+        private static void JsOnError(int instanceId)
         {
-            if (!Instances.TryGetValue(instanceId, out var instance))
-                return;
-
-            instance.OnClose(closeCode);
+            Error?.Invoke(instanceId);
         }
         #endregion
     }

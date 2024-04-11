@@ -1,45 +1,23 @@
 
 var LibraryWebSocket =
 {
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    // Instance Management
+    ///////////////////////////////////////////////////////////////////////////////////////////////
     $webSocketState:
     {
         instances: {},
 
         lastId: 0,
 
-        onOpen: null,
-        onBinaryMessage: null,
-        onTextMessage: null,
-        onError: null,
-        onClose: null
+        openCallback: null,
+        binaryMessageCallback: null,
+        textMessageCallback: null,
+        errorCallback: null,
+        closeCallback: null
     },
 
-    WebSocketSetOnOpen: function(callback)
-    {
-        webSocketState.onOpen = callback;
-    },
-
-    WebSocketSetOnBinaryMessage: function(callback)
-    {
-        webSocketState.onBinaryMessage = callback;
-    },
-
-    WebSocketSetOnTextMessage: function(callback)
-    {
-        webSocketState.onTextMessage = callback;
-    },
-
-    WebSocketSetOnError: function(callback)
-    {
-        webSocketState.onError = callback;
-    },
-
-    WebSocketSetOnClose: function(callback)
-    {
-        webSocketState.onClose = callback;
-    },
-
-    WebSocketAllocate: function(url, debugLogging)
+    WebSocketNew: function(url, debugLogging)
     {
         var urlStr = UTF8ToString(url);
         var instanceId = ++webSocketState.lastId;
@@ -52,7 +30,7 @@ var LibraryWebSocket =
         };
 
         if (debugLogging)
-            console.log("[JSLIB WebSocket] Instance " + instanceId + ": allocated");
+            console.log("[JSLIB WebSocket] Allocated instance " + instanceId);
 
         return instanceId;
     },
@@ -63,14 +41,14 @@ var LibraryWebSocket =
         webSocketState.instances[instanceId].subprotocols.push(subprotocolStr);
     },
 
-    WebSocketFree: function(instanceId)
+    WebSocketDelete: function(instanceId)
     {
         var instance = webSocketState.instances[instanceId];
         if (!instance)
             return 0;
 
         if (instance.debugLogging)
-            console.log("[JSLIB WebSocket] Instance " + instanceId + ": freeing");
+            console.log("[JSLIB WebSocket] Delete instance " + instanceId);
 
         if (instance.ws && instance.ws.readyState < 2)
             instance.ws.close();
@@ -80,6 +58,9 @@ var LibraryWebSocket =
         return 0;
     },
 
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    // Instance API
+    ///////////////////////////////////////////////////////////////////////////////////////////////
     WebSocketConnect: function(instanceId)
     {
         var instance = webSocketState.instances[instanceId];
@@ -93,33 +74,33 @@ var LibraryWebSocket =
 
         instance.ws.binaryType = 'arraybuffer';
 
-        instance.ws.onopen = function()
+        instance.ws.onopen = function(event)
         {
             if (instance.debugLogging)
-                console.log("[JSLIB WebSocket] Instance " + instanceId + "}: connected");
+                console.log("[JSLIB WebSocket] Instance " + instanceId + ": connected");
 
-            if (webSocketState.onOpen)
-                Module.dynCall_vi(webSocketState.onOpen, instanceId);
+            if (webSocketState.openCallback)
+                Module.dynCall_vi(webSocketState.openCallback, instanceId);
         };
 
-        instance.ws.onmessage = function(ev)
+        instance.ws.onmessage = function(event)
         {
             if (instance.debugLogging)
-                console.log("[JSLIB WebSocket] Instance " + instanceId + ": received " + ev.data);
+                console.log("[JSLIB WebSocket] Instance " + instanceId + ": received " + event.data);
 
-            if (ev.data instanceof ArrayBuffer)
+            if (event.data instanceof ArrayBuffer)
             {
-                if (webSocketState.onBinaryMessage === null)
+                if (webSocketState.binaryMessageCallback === null)
                     return;
 
-                var dataBuffer = new Uint8Array(ev.data);
+                var dataBuffer = new Uint8Array(event.data);
 
                 var buffer = _malloc(dataBuffer.length);
                 HEAPU8.set(dataBuffer, buffer);
 
                 try
                 {
-                    Module.dynCall_viii(webSocketState.onBinaryMessage, instanceId, buffer, dataBuffer.length);
+                    Module.dynCall_viii(webSocketState.binaryMessageCallback, instanceId, buffer, dataBuffer.length);
                 }
                 finally
                 {
@@ -128,16 +109,16 @@ var LibraryWebSocket =
             }
             else
             {
-                if (webSocketState.onTextMessage === null)
+                if (webSocketState.textMessageCallback === null)
                     return;
 
-                var length = lengthBytesUTF8(ev.data) + 1;
+                var length = lengthBytesUTF8(event.data) + 1;
                 var buffer = _malloc(length);
-                stringToUTF8(ev.data, buffer, length);
+                stringToUTF8(event.data, buffer, length);
 
                 try
                 {
-                    Module.dynCall_vii(webSocketState.onTextMessage, instanceId, buffer);
+                    Module.dynCall_vii(webSocketState.textMessageCallback, instanceId, buffer);
                 }
                 finally
                 {
@@ -146,36 +127,31 @@ var LibraryWebSocket =
             }
         };
 
-        instance.ws.onerror = function(ev)
+        instance.ws.onerror = function(event)
         {
             if (instance.debugLogging)
                 console.log("[JSLIB WebSocket] Instance " + instanceId + ": error occured");
 
-            if (webSocketState.onError)
-            {
-                var message = "WebSocket error";
-                var length = lengthBytesUTF8(message) + 1;
-                var buffer = _malloc(length);
-                stringToUTF8(message, buffer, length);
+            if (webSocketState.errorCallback === null)
+                return;
 
-                try
-                {
-                    Module.dynCall_vii(webSocketState.onError, instanceId, buffer);
-                }
-                finally
-                {
-                    _free(buffer);
-                }
+            try
+            {
+                Module.dynCall_vi(webSocketState.errorCallback, instanceId);
+            }
+            finally
+            {
+                _free(buffer);
             }
         };
 
-        instance.ws.onclose = function(ev)
+        instance.ws.onclose = function(event)
         {
             if (instance.debugLogging)
-                console.log("[JSLIB WebSocket] Instance " + instanceId + ": closed with code " + ev.code);
+                console.log("[JSLIB WebSocket] Instance " + instanceId + ": closed with code " + event.code);
 
-            if (webSocketState.onClose)
-                Module.dynCall_vii(webSocketState.onClose, instanceId, ev.code);
+            if (webSocketState.closeCallback)
+                Module.dynCall_vii(webSocketState.closeCallback, instanceId, event.code);
 
             delete instance.ws;
         };
@@ -254,8 +230,36 @@ var LibraryWebSocket =
         if (instance.ws)
             return instance.ws.readyState;
         else
-            return 3;
+            return -3;
     }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    // Instance Events
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    WebSocketSetOpenCallback: function(callback)
+    {
+        webSocketState.openCallback = callback;
+    },
+
+    WebSocketSetBinaryMessageCallback: function(callback)
+    {
+        webSocketState.binaryMessageCallback = callback;
+    },
+
+    WebSocketSetTextMessageCallback: function(callback)
+    {
+        webSocketState.textMessageCallback = callback;
+    },
+
+    WebSocketSetCloseCallback: function(callback)
+    {
+        webSocketState.closeCallback = callback;
+    },
+
+    WebSocketSetErrorCallback: function(callback)
+    {
+        webSocketState.errorCallback = callback;
+    },
 };
 
 autoAddDeps(LibraryWebSocket, '$webSocketState');
