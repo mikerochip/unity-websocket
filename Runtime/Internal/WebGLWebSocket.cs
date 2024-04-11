@@ -310,6 +310,15 @@ namespace MikeSchweitzer.WebSocket.Internal
         public static event TextMessageReceivedHandler TextMessageReceived;
         public static event ClosedHandler Closed;
         public static event ErrorHandler Error;
+
+        private static void InstallInstanceEventCallbacks()
+        {
+            WebSocketSetOpenCallback(JsOnOpen);
+            WebSocketSetBinaryMessageCallback(JsOnBinaryMessage);
+            WebSocketSetTextMessageCallback(JsOnTextMessage);
+            WebSocketSetErrorCallback(JsOnError);
+            WebSocketSetCloseCallback(JsOnClose);
+        }
         #endregion
 
         #region Marshaled Instance Management
@@ -351,15 +360,6 @@ namespace MikeSchweitzer.WebSocket.Internal
         private static extern void WebSocketSetCloseCallback(JsCloseCallback callback);
         [DllImport ("__Internal")]
         private static extern void WebSocketSetErrorCallback(JsErrorCallback callback);
-
-        private static void InstallInstanceEventCallbacks()
-        {
-            WebSocketSetOpenCallback(JsOnOpen);
-            WebSocketSetBinaryMessageCallback(JsOnBinaryMessage);
-            WebSocketSetTextMessageCallback(JsOnTextMessage);
-            WebSocketSetErrorCallback(JsOnError);
-            WebSocketSetCloseCallback(JsOnClose);
-        }
 
         [MonoPInvokeCallback(typeof(JsOpenCallback))]
         private static void JsOnOpen(int instanceId)
