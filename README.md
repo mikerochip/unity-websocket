@@ -19,7 +19,7 @@
    * No external install requirements or dependencies
    * `string` is treated as text and `byte[]` as binary (some servers care)
    * Customizable ping-pong support for servers that enforce idle timeouts
-   * WebGL uses a bundled JavaScript lib `WebSocket.jslib`
+   * Web uses a JavaScript lib `WebSocket.jslib`, and includes support for `WebAssembly.Table` from Unity 2023.2+
    * Other platforms use the built-in `System.Net.WebSockets`
 
 # Install

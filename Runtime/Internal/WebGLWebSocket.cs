@@ -224,7 +224,12 @@ namespace MikeSchweitzer.WebSocket.Internal
 
             IsInitialized = true;
 
-            InstallInstanceEventCallbacks();
+            WebSocketInitialize();
+            WebSocketSetOpenCallback(JsOnOpen);
+            WebSocketSetBinaryMessageCallback(JsOnBinaryMessage);
+            WebSocketSetTextMessageCallback(JsOnTextMessage);
+            WebSocketSetErrorCallback(JsOnError);
+            WebSocketSetCloseCallback(JsOnClose);
         }
 
         public static string TranslateCustomErrorState(int state)
@@ -310,23 +315,16 @@ namespace MikeSchweitzer.WebSocket.Internal
         public static event TextMessageReceivedHandler TextMessageReceived;
         public static event ClosedHandler Closed;
         public static event ErrorHandler Error;
-
-        private static void InstallInstanceEventCallbacks()
-        {
-            WebSocketSetOpenCallback(JsOnOpen);
-            WebSocketSetBinaryMessageCallback(JsOnBinaryMessage);
-            WebSocketSetTextMessageCallback(JsOnTextMessage);
-            WebSocketSetErrorCallback(JsOnError);
-            WebSocketSetCloseCallback(JsOnClose);
-        }
         #endregion
 
         #region Marshaled Instance Management
-        [DllImport ("__Internal")]
+        [DllImport("__Internal")]
+        private static extern int WebSocketInitialize();
+        [DllImport("__Internal")]
         private static extern int WebSocketNew(string url, bool debugLogging);
-        [DllImport ("__Internal")]
+        [DllImport("__Internal")]
         private static extern void WebSocketAddSubprotocol(int instanceId, string subprotocol);
-        [DllImport ("__Internal")]
+        [DllImport("__Internal")]
         private static extern void WebSocketDelete(int instanceId);
         #endregion
 

@@ -13,7 +13,14 @@ var LibraryWebSocket =
         binaryMessageCallback: null,
         textMessageCallback: null,
         errorCallback: null,
-        closeCallback: null
+        closeCallback: null,
+
+        haveDynCall: false
+    },
+
+    WebSocketInitialize: function()
+    {
+        webSocketState.haveDynCall = (typeof dynCall !== 'undefined');
     },
 
     WebSocketNew: function(url, debugLogging)
@@ -81,10 +88,10 @@ var LibraryWebSocket =
 
             if (webSocketState.openCallback)
             {
-                if (dynCall)
+                if (webSocketState.haveDynCall)
                     Module.dynCall_vi(webSocketState.openCallback, instanceId);
                 else
-                    {{{ makeDynCall('vi', 'webSocketState.openCallback') }}}(instanceId)
+                    {{{ makeDynCall('vi', 'webSocketState.openCallback') }}}(instanceId);
             }
         };
 
@@ -105,10 +112,10 @@ var LibraryWebSocket =
 
                 try
                 {
-                    if (dynCall)
+                    if (webSocketState.haveDynCall)
                         Module.dynCall_viii(webSocketState.binaryMessageCallback, instanceId, buffer, dataBuffer.length);
                     else
-                        {{{ makeDynCall('viii', 'webSocketState.binaryMessageCallback') }}}(instanceId, buffer, dataBuffer.length)
+                        {{{ makeDynCall('viii', 'webSocketState.binaryMessageCallback') }}}(instanceId, buffer, dataBuffer.length);
                 }
                 finally
                 {
@@ -126,10 +133,10 @@ var LibraryWebSocket =
 
                 try
                 {
-                    if (dynCall)
+                    if (webSocketState.haveDynCall)
                         Module.dynCall_vii(webSocketState.textMessageCallback, instanceId, buffer);
                     else
-                        {{{ makeDynCall('vii', 'webSocketState.textMessageCallback') }}}(instanceId, buffer)
+                        {{{ makeDynCall('vii', 'webSocketState.textMessageCallback') }}}(instanceId, buffer);
                 }
                 finally
                 {
@@ -148,10 +155,10 @@ var LibraryWebSocket =
 
             try
             {
-                if (dynCall)
+                if (webSocketState.haveDynCall)
                     Module.dynCall_vi(webSocketState.errorCallback, instanceId);
                 else
-                    {{{ makeDynCall('vi', 'webSocketState.errorCallback') }}}(instanceId)
+                    {{{ makeDynCall('vi', 'webSocketState.errorCallback') }}}(instanceId);
             }
             finally
             {
@@ -166,10 +173,10 @@ var LibraryWebSocket =
 
             if (webSocketState.closeCallback)
             {
-                if (dynCall)
+                if (webSocketState.haveDynCall)
                     Module.dynCall_vii(webSocketState.closeCallback, instanceId, event.code);
                 else
-                    {{{ makeDynCall('vii', 'webSocketState.closeCallback') }}}(instanceId, event.code)
+                    {{{ makeDynCall('vii', 'webSocketState.closeCallback') }}}(instanceId, event.code);
             }
 
             delete instance.ws;
