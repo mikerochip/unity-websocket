@@ -7,8 +7,9 @@
 # Features
 
 * Easy to use
+   * **Doesn't force you to use `async/await`**: use event listeners, coroutines, or polling
+   * **Doesn't force you to use `#if` for WebGL**: no platform-specific compilation required
    * `WebSocketConnection` is just a `MonoBehaviour`
-   * Doesn't force you to use `async/await`: use event listeners, coroutines, or polling
    * Public API prevents you from corrupting an active connection
    * Reusable: connect, disconnect, change URL, connect again, etc
 * Flexible config
