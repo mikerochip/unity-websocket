@@ -8,7 +8,7 @@
 
 * Easy to use
    * **Doesn't force you to use `async/await`**: use event listeners, coroutines, or polling
-   * **Doesn't force you to use `#if` for WebGL**: no platform-specific compilation required
+   * **Doesn't force you to use `#if` for WebGL**: no platform-specific code required to use it
    * `WebSocketConnection` is just a `MonoBehaviour`
    * Public API prevents you from corrupting an active connection
    * Reusable: connect, disconnect, change URL, connect again, etc
