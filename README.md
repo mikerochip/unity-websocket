@@ -257,17 +257,32 @@ private async Task ReceiveMessagesAsync()
 
 ## Customizable Ping-Pong Support
 
-WebGL (JavaScript) has no built-in ping-pong support, unlike .NET. Configuring this will make pings work on both platforms.
+.NET has built-in ping-pong support, implementing [the WebSocket spec](https://datatracker.ietf.org/doc/html/rfc6455#section-5.5.2). WebGL (specifically, JavaScript) does not.
+
+Use this for ping-pong support that you can write once for web or non-web client builds.
+
+⚠️ Your server must be configured to echo messages of the same message type (text or binary) and content.
 
 ```CSharp
-_Connection.DesiredConfig = new WebSocketConfig
+private void ConfigureStringPings()
 {
-    PingInterval = TimeSpan.FromSeconds(30),
-    PingMessage = new WebSocketMessage("foo"),
-};
-```
+    _Connection.DesiredConfig = new WebSocketConfig
+    {
+        PingInterval = TimeSpan.FromSeconds(30),
+        PingMessage = new WebSocketMessage("ping"),
+    };
+}
 
-⚠️ Your server must ignore or echo messages of the same message type (text or binary) and content.
+private byte[] _pingBytes = Encoding.UTF8.GetBytes("ping");
+private void ConfigureBinaryPings()
+{
+    _Connection.DesiredConfig = new WebSocketConfig
+    {
+        PingInterval = TimeSpan.FromSeconds(30),
+        PingMessage = new WebSocketMessage(_pingBytes),
+    };
+}
+```
 
 # Attribution
 
