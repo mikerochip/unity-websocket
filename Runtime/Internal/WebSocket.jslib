@@ -153,17 +153,11 @@ var LibraryWebSocket =
             if (webSocketState.errorCallback === null)
                 return;
 
-            try
-            {
-                if (webSocketState.haveDynCall)
-                    Module.dynCall_vi(webSocketState.errorCallback, instanceId);
-                else
-                    {{{ makeDynCall('vi', 'webSocketState.errorCallback') }}}(instanceId);
-            }
-            finally
-            {
-                _free(buffer);
-            }
+			if (webSocketState.haveDynCall)
+				Module.dynCall_vi(webSocketState.errorCallback, instanceId);
+			else
+				{{{ makeDynCall('vi', 'webSocketState.errorCallback') }}}(instanceId);
+            
         };
 
         instance.ws.onclose = function(event)
