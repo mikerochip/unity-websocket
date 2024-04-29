@@ -7,11 +7,11 @@
 # Features
 
 * Easy to use
-   * **Doesn't force you to use `async/await`**: use event listeners, coroutines, or polling
-   * **Doesn't force you to use `#if` for WebGL**: no platform-specific code required to use it
+   * **`async/await` is optional, not required**: use event listeners, coroutines, or polling
+   * **Doesn't force `#if` for WebGL**: write your code once with no conditional-compilation required
    * `WebSocketConnection` is just a `MonoBehaviour`
    * Public API prevents you from corrupting an active connection
-   * Reusable: connect, disconnect, change URL, connect again, etc
+   * `WebSocketConnection` is reusable: connect, disconnect, change URL, connect again, etc
 * Flexible config
    * URL is the only required config
    * Sane defaults
@@ -20,8 +20,8 @@
    * No external install requirements or dependencies
    * `string` is treated as text and `byte[]` as binary (some servers care)
    * Customizable ping-pong support for servers that enforce idle timeouts
-   * Web uses a JavaScript lib `WebSocket.jslib`, and includes support for `WebAssembly.Table` from Unity 2023.2+
-   * Other platforms use the built-in `System.Net.WebSockets`
+   * Web uses its own JavaScript lib `WebSocket.jslib`, including support for `WebAssembly.Table` (Unity 2023.2+)
+   * Other platforms use the built-in .NET `System.Net.WebSockets`
 
 # Install
 
