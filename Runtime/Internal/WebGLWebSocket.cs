@@ -224,7 +224,6 @@ namespace MikeSchweitzer.WebSocket.Internal
 
             IsInitialized = true;
 
-            WebSocketInitialize();
             WebSocketSetOpenCallback(JsOnOpen);
             WebSocketSetBinaryMessageCallback(JsOnBinaryMessage);
             WebSocketSetTextMessageCallback(JsOnTextMessage);
@@ -318,8 +317,6 @@ namespace MikeSchweitzer.WebSocket.Internal
         #endregion
 
         #region Marshaled Instance Management
-        [DllImport("__Internal")]
-        private static extern int WebSocketInitialize();
         [DllImport("__Internal")]
         private static extern int WebSocketNew(string url, bool debugLogging);
         [DllImport("__Internal")]
