@@ -6,7 +6,7 @@ namespace MikeSchweitzer.WebSocket
         Connect,
         Disconnect,
     }
-    
+
     public enum WebSocketState
     {
         Invalid,
@@ -14,5 +14,6 @@ namespace MikeSchweitzer.WebSocket
         Connected,
         Disconnecting,
         Disconnected,
+        DisconnectedFromAppQuit,
     }
 }
