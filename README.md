@@ -20,9 +20,8 @@
    * No external install requirements or dependencies
    * `string` is treated as text and `byte[]` as binary (some servers care)
    * Customizable ping-pong support for servers that enforce idle timeouts
-   * Web uses its own JavaScript lib `WebSocket.jslib`
    * Includes support for `WebAssembly.Table` (Unity 2023.2+)
-   * Other platforms use the built-in .NET `System.Net.WebSockets`
+   * Web uses a `.jslib` JavaScript library, other platforms use the built-in `System.Net.WebSockets`
 
 # Install
 
