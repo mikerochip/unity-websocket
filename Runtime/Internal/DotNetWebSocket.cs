@@ -264,13 +264,21 @@ namespace MikeSchweitzer.WebSocket.Internal
         {
             while (_socket.State == System.Net.WebSockets.WebSocketState.Open)
             {
-                WebSocketMessage message;
+                WebSocketMessage message = null;
+                int count;
                 lock (_outgoingMessages)
                 {
-                    if (_outgoingMessages.Count == 0)
-                        continue;
+                    count = _outgoingMessages.Count;
+                    if (count != 0)
+                    {
+                        message = _outgoingMessages.Dequeue();
+                    }
+                }
 
-                    message = _outgoingMessages.Dequeue();
+                if (count == 0)
+                {
+                    await Task.Delay(10);
+                    continue;
                 }
 
                 var segment = new ArraySegment<byte>(message.Bytes);
