@@ -173,7 +173,10 @@ namespace MikeSchweitzer.WebSocket.Internal
                 return;
 
             if (bytes.Length > instance._maxReceiveBytes)
+            {
+                instance.Error?.Invoke(WebSocketHelpers.GetReceiveSizeExceededErrorMessage(bytes.Length, instance._maxReceiveBytes));
                 return;
+            }
 
             var message = new WebSocketMessage(bytes);
             instance._incomingMessages.Enqueue(message);
@@ -186,7 +189,10 @@ namespace MikeSchweitzer.WebSocket.Internal
 
             var bytes = System.Text.Encoding.UTF8.GetBytes(text);
             if (bytes.Length > instance._maxReceiveBytes)
+            {
+                instance.Error?.Invoke(WebSocketHelpers.GetReceiveSizeExceededErrorMessage(bytes.Length, instance._maxReceiveBytes));
                 return;
+            }
 
             var message = new WebSocketMessage(text);
             instance._incomingMessages.Enqueue(message);

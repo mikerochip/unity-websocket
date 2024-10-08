@@ -25,6 +25,7 @@ namespace MikeSchweitzer.WebSocket.Internal
         private ClientWebSocket _socket;
 
         private readonly Queue<WebSocketMessage> _incomingMessages = new Queue<WebSocketMessage>();
+        private readonly Queue<string> _incomingErrorMessages = new Queue<string>();
         private readonly Queue<WebSocketMessage> _outgoingMessages = new Queue<WebSocketMessage>();
         #endregion
 
@@ -90,18 +91,35 @@ namespace MikeSchweitzer.WebSocket.Internal
         #region IWebSocket Methods
         public void ProcessIncomingMessages()
         {
-            List<WebSocketMessage> messages;
-            lock (_incomingMessages)
+            List<string> errorMessages = null;
+            lock (_incomingErrorMessages)
             {
-                if (_incomingMessages.Count == 0)
-                    return;
-
-                messages = new List<WebSocketMessage>(_incomingMessages);
-                _incomingMessages.Clear();
+                if (_incomingErrorMessages.Count > 0)
+                {
+                    errorMessages = new List<string>(_incomingErrorMessages);
+                    _incomingErrorMessages.Clear();
+                }
+            }
+            if (errorMessages != null)
+            {
+                foreach (var message in errorMessages)
+                    Error?.Invoke(message);
             }
 
-            foreach (var message in messages)
-                MessageReceived?.Invoke(message);
+            List<WebSocketMessage> messages = null;
+            lock (_incomingMessages)
+            {
+                if (_incomingMessages.Count > 0)
+                {
+                    messages = new List<WebSocketMessage>(_incomingMessages);
+                    _incomingMessages.Clear();
+                }
+            }
+            if (messages != null)
+            {
+                foreach (var message in messages)
+                    MessageReceived?.Invoke(message);
+            }
         }
 
         public void AddOutgoingMessage(WebSocketMessage message)
@@ -204,9 +222,10 @@ namespace MikeSchweitzer.WebSocket.Internal
             var buffer = new ArraySegment<byte>(new byte[_maxReceiveBytes]);
             while (_socket.State == System.Net.WebSockets.WebSocketState.Open)
             {
-                using (var ms = new MemoryStream())
+                using (var memoryStream = new MemoryStream())
                 {
                     WebSocketReceiveResult result;
+                    string errorMessage = null;
                     var byteCount = 0;
                     do
                     {
@@ -217,45 +236,41 @@ namespace MikeSchweitzer.WebSocket.Internal
                         {
                             while (!result.EndOfMessage)
                                 result = await _socket.ReceiveAsync(buffer, _cancellationToken);
+
+                            errorMessage = WebSocketHelpers.GetReceiveSizeExceededErrorMessage(byteCount, _maxReceiveBytes);
                             break;
                         }
 
                         if (result.CloseStatus != null)
                             break;
 
-                        ms.Write(buffer.Array, buffer.Offset, result.Count);
+                        memoryStream.Write(buffer.Array, buffer.Offset, result.Count);
                     }
                     while (!result.EndOfMessage);
 
+                    if (errorMessage != null)
+                    {
+                        lock (_incomingErrorMessages)
+                            _incomingErrorMessages.Enqueue(errorMessage);
+                    }
+
                     if (result.CloseStatus != null)
                     {
-                        await _socket.CloseAsync(
-                            result.CloseStatus.Value,
-                            result.CloseStatusDescription,
-                            CancellationToken.None);
+                        await _socket.CloseAsync(result.CloseStatus.Value, result.CloseStatusDescription, CancellationToken.None);
                         break;
                     }
 
                     if (byteCount > _maxReceiveBytes)
                         continue;
 
-                    ms.Seek(0, SeekOrigin.Begin);
-                    var bytes = ms.ToArray();
+                    memoryStream.Seek(0, SeekOrigin.Begin);
+                    var bytes = memoryStream.ToArray();
+                    var message = result.MessageType == WebSocketMessageType.Binary
+                        ? new WebSocketMessage(bytes)
+                        : new WebSocketMessage(System.Text.Encoding.UTF8.GetString(bytes));
 
-                    WebSocketMessage message;
-                    if (result.MessageType == WebSocketMessageType.Binary)
-                    {
-                        message = new WebSocketMessage(bytes);
-                    }
-                    else
-                    {
-                        var str = System.Text.Encoding.UTF8.GetString(bytes);
-                        message = new WebSocketMessage(str);
-                    }
                     lock (_incomingMessages)
-                    {
                         _incomingMessages.Enqueue(message);
-                    }
                 }
             }
         }

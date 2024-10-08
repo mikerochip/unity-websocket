@@ -61,6 +61,11 @@ namespace MikeSchweitzer.WebSocket.Internal
             return WebSocketCloseCode.Undefined;
         }
 
+        public static string GetReceiveSizeExceededErrorMessage(int bytes, int maxBytes)
+        {
+            return $"Incoming message size {bytes} exceeded max size {maxBytes}";
+        }
+
         public static IWebSocket CreateWebSocket(
             string url,
             IEnumerable<string> subprotocols,
