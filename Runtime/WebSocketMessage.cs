@@ -13,7 +13,7 @@ namespace MikeSchweitzer.WebSocket
     {
         #region Public Properties
         public WebSocketDataType Type { get; }
-        public byte[] Bytes => _bytes ??(_stringAsBytes ?? (_stringAsBytes = WebSocketConnection.StringToBytes(_string)));
+        public byte[] Bytes => _bytes ?? (_stringAsBytes ?? (_stringAsBytes = WebSocketConnection.StringToBytes(_string)));
         public string String => _string ?? (_bytesAsString ?? (_bytesAsString = WebSocketConnection.BytesToString(_bytes)));
         #endregion
 

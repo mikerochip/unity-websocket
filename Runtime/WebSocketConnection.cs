@@ -11,12 +11,12 @@ namespace MikeSchweitzer.WebSocket
 {
     public class WebSocketConnection : MonoBehaviour
     {
-        #region Desired State Properties
+        #region Read/Write Desired State Properties
         public WebSocketConfig DesiredConfig { get; set; } = new WebSocketConfig();
         public WebSocketDesiredState DesiredState { get; private set; }
         #endregion
 
-        #region Current State Properties
+        #region Read-Only Current State Properties
         public string Url => Config?.Url;
         public WebSocketConfig Config { get; private set; }
         public WebSocketState State { get; private set; }
@@ -30,8 +30,7 @@ namespace MikeSchweitzer.WebSocket
         #endregion
 
         #region Public Events
-        public delegate void StateChangedHandler(WebSocketConnection connection,
-            WebSocketState oldState, WebSocketState newState);
+        public delegate void StateChangedHandler(WebSocketConnection connection, WebSocketState oldState, WebSocketState newState);
         public delegate void MessageReceivedHandler(WebSocketConnection connection, WebSocketMessage message);
         public delegate void ErrorMessageReceivedHandler(WebSocketConnection connection, string errorMessage);
 
@@ -45,8 +44,9 @@ namespace MikeSchweitzer.WebSocket
         private IWebSocket _webSocket;
         private Task _connectTask;
         private DateTime _lastPingTimestamp;
-        private readonly LinkedList<WebSocketMessage> _incomingMessages = new LinkedList<WebSocketMessage>();
-        private readonly LinkedList<WebSocketMessage> _outgoingMessages = new LinkedList<WebSocketMessage>();
+
+        private readonly Queue<WebSocketMessage> _incomingMessages = new Queue<WebSocketMessage>();
+        private readonly Queue<WebSocketMessage> _outgoingMessages = new Queue<WebSocketMessage>();
         #endregion
 
         #region Public API
@@ -99,17 +99,16 @@ namespace MikeSchweitzer.WebSocket
                 return;
             }
 
-            _outgoingMessages.AddLast(message);
+            _outgoingMessages.Enqueue(message);
         }
 
         public bool TryRemoveIncomingMessage(out string message)
         {
             message = null;
-            if (_incomingMessages.First == null)
+            if (_incomingMessages.Count == 0)
                 return false;
 
-            var result = _incomingMessages.First.Value;
-            _incomingMessages.RemoveFirst();
+            var result = _incomingMessages.Dequeue();
             message = result.String;
             return true;
         }
@@ -117,11 +116,10 @@ namespace MikeSchweitzer.WebSocket
         public bool TryRemoveIncomingMessage(out byte[] message)
         {
             message = null;
-            if (_incomingMessages.First == null)
+            if (_incomingMessages.Count == 0)
                 return false;
 
-            var result = _incomingMessages.First.Value;
-            _incomingMessages.RemoveFirst();
+            var result = _incomingMessages.Dequeue();
             message = result.Bytes;
             return true;
         }
@@ -156,6 +154,7 @@ namespace MikeSchweitzer.WebSocket
                 return;
 
             ForceShutdownWebSocket();
+            // clear messages after state change so messages are available to event listeners
             ChangeState(WebSocketState.DisconnectedFromAppQuit);
             ClearMessageBuffers();
         }
@@ -166,18 +165,21 @@ namespace MikeSchweitzer.WebSocket
         {
             while (true)
             {
-                // process active states first
+                // process Disconnecting before desired state so we can ensure Disconnecting
+                // always leads to Disconnected
                 if (State == WebSocketState.Disconnecting)
                 {
                     await ShutdownWebSocketAsync();
+                    // clear messages after state change so messages are available to event listeners
                     ChangeState(WebSocketState.Disconnected);
                     ClearMessageBuffers();
                 }
 
+                // cancellations only happen when destroying or shutting down, so we don't need to
+                // process desired states afterward
                 if (_cts.IsCancellationRequested)
                     break;
 
-                // process desired states second
                 if (DesiredState == WebSocketDesiredState.Connect)
                 {
                     DesiredState = WebSocketDesiredState.None;
@@ -187,6 +189,7 @@ namespace MikeSchweitzer.WebSocket
                     ChangeState(WebSocketState.Connecting);
 
                     await ShutdownWebSocketAsync();
+
                     try
                     {
                         InitializeWebSocket();
@@ -255,10 +258,9 @@ namespace MikeSchweitzer.WebSocket
                     }
                 }
 
-                while (_webSocket?.State == Internal.WebSocketState.Open && _outgoingMessages.First != null)
+                while (_webSocket?.State == Internal.WebSocketState.Open && _outgoingMessages.Count > 0)
                 {
-                    var message = _outgoingMessages.First.Value;
-                    _outgoingMessages.RemoveFirst();
+                    var message = _outgoingMessages.Dequeue();
                     _webSocket.AddOutgoingMessage(message);
                 }
 
@@ -309,7 +311,9 @@ namespace MikeSchweitzer.WebSocket
 
             OnWebSocketShutdown();
         }
+        #endregion
 
+        #region Internal WebSocket Events
         private void OnWebSocketShutdown()
         {
             _connectTask = null;
@@ -332,11 +336,32 @@ namespace MikeSchweitzer.WebSocket
             if (IsPinging && message.Equals(Config.PingMessage))
                 return;
 
-            _incomingMessages.AddLast(message);
+            // we have to always enqueue the message to ensure the public property IncomingMessages
+            // is accurate, even though we want to remove the message if there is at least one
+            // event listener
+            _incomingMessages.Enqueue(message);
             if (MessageReceived == null)
                 return;
+
             MessageReceived.Invoke(this, message);
-            _incomingMessages.RemoveLast();
+
+            // it's possible the message list was manipulated by a listener, so sanity check
+            // that the message list isn't empty now
+            if (_incomingMessages.Count == 0)
+                return;
+
+            // remove the last element of the queue by re-queueing all but the last one, which is
+            // not the most efficient use of CPU, but:
+            // 1. does not generate as much garbage over time as a LinkedList
+            // 2. saves memory vs having another queue just to store the last element
+            // 3. maintains API ergonomics for the public property IncomingMessages
+            while (true)
+            {
+                var firstMessage = _incomingMessages.Dequeue();
+                if (ReferenceEquals(firstMessage, message))
+                    break;
+                _incomingMessages.Enqueue(firstMessage);
+            }
         }
 
         private void OnClosed(WebSocketCloseCode closeCode)

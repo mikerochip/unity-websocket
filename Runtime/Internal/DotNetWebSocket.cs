@@ -24,9 +24,12 @@ namespace MikeSchweitzer.WebSocket.Internal
         private CancellationToken _cancellationToken;
         private ClientWebSocket _socket;
 
+        private readonly Queue<WebSocketMessage> _outgoingMessages = new Queue<WebSocketMessage>();
         private readonly Queue<WebSocketMessage> _incomingMessages = new Queue<WebSocketMessage>();
         private readonly Queue<string> _incomingErrorMessages = new Queue<string>();
-        private readonly Queue<WebSocketMessage> _outgoingMessages = new Queue<WebSocketMessage>();
+        // temp lists are used to reduce garbage when copying from the locked queues above
+        private readonly List<WebSocketMessage> _tempIncomingMessages = new List<WebSocketMessage>();
+        private readonly List<string> _tempIncomingErrorMessages = new List<string>();
         #endregion
 
         #region IWebSocket Events
@@ -91,34 +94,34 @@ namespace MikeSchweitzer.WebSocket.Internal
         #region IWebSocket Methods
         public void ProcessIncomingMessages()
         {
-            List<string> errorMessages = null;
             lock (_incomingErrorMessages)
             {
                 if (_incomingErrorMessages.Count > 0)
                 {
-                    errorMessages = new List<string>(_incomingErrorMessages);
+                    _tempIncomingErrorMessages.AddRange(_incomingErrorMessages);
                     _incomingErrorMessages.Clear();
                 }
             }
-            if (errorMessages != null)
+            if (_tempIncomingErrorMessages.Count > 0)
             {
-                foreach (var message in errorMessages)
+                foreach (var message in _tempIncomingErrorMessages)
                     Error?.Invoke(message);
+                _tempIncomingErrorMessages.Clear();
             }
 
-            List<WebSocketMessage> messages = null;
             lock (_incomingMessages)
             {
                 if (_incomingMessages.Count > 0)
                 {
-                    messages = new List<WebSocketMessage>(_incomingMessages);
+                    _tempIncomingMessages.AddRange(_incomingMessages);
                     _incomingMessages.Clear();
                 }
             }
-            if (messages != null)
+            if (_tempIncomingMessages.Count > 0)
             {
-                foreach (var message in messages)
+                foreach (var message in _tempIncomingMessages)
                     MessageReceived?.Invoke(message);
+                _tempIncomingMessages.Clear();
             }
         }
 
