@@ -72,7 +72,6 @@ namespace MikeSchweitzer.WebSocket.Internal
             IEnumerable<string> subprotocols,
             Dictionary<string, string> headers,
             int maxReceiveBytes,
-            bool debugLogging,
             bool suppressKeepAlive)
         {
             _uri = uri;

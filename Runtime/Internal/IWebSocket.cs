@@ -80,7 +80,7 @@ namespace MikeSchweitzer.WebSocket.Internal
                 throw new ArgumentException($"Unsupported protocol: {protocol}");
 
             #if !UNITY_WEBGL || UNITY_EDITOR
-                return new DotNetWebSocket(uri, subprotocols, headers, maxReceiveBytes, debugLogging, suppressDotNetKeepAlive);
+                return new DotNetWebSocket(uri, subprotocols, headers, maxReceiveBytes, suppressDotNetKeepAlive);
             #else
                 return new WebGLWebSocket(uri, subprotocols, maxReceiveBytes, debugLogging);
             #endif
