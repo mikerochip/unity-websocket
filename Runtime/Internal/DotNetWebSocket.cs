@@ -291,7 +291,7 @@ namespace MikeSchweitzer.WebSocket.Internal
 
                 if (message == null)
                 {
-                    await Task.Yield();
+                    await Task.Delay(10, _cancellationToken);
                     continue;
                 }
 
