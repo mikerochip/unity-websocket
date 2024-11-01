@@ -126,10 +126,7 @@ namespace MikeSchweitzer.WebSocket.Internal
 
         public void AddOutgoingMessage(WebSocketMessage message)
         {
-            lock (_outgoingMessages)
-            {
-                _outgoingMessages.Enqueue(message);
-            }
+            _outgoingMessages.Enqueue(message);
         }
 
         public async Task ConnectAsync()
@@ -156,7 +153,7 @@ namespace MikeSchweitzer.WebSocket.Internal
                 await _socket.ConnectAsync(_uri, _cancellationToken);
                 Opened?.Invoke();
 
-                await RunAsync();
+                await PumpMessagesAsync();
             }
             catch (Exception e)
             {
@@ -204,13 +201,20 @@ namespace MikeSchweitzer.WebSocket.Internal
         #endregion
 
         #region Internal Methods
-        private async Task RunAsync()
+        private async Task PumpMessagesAsync()
         {
-            // don't block the main thread while pumping messages
-            await new WaitForBackgroundThreadStart();
+            await Task.WhenAll(ReceiveOnThreadAsync(), SendLoopAsync());
+        }
+
+        private async Task ReceiveOnThreadAsync()
+        {
+            // _socket.ReceiveAsync() is a blocking call, and we don't want to block the main
+            // thread so we put that on a thread pool thread
+            await new WaitForThreadPoolThreadStart();
+
             try
             {
-                await Task.WhenAll(ReceiveAsync(), SendAsync());
+                await ReceiveLoopAsync();
             }
             finally
             {
@@ -219,7 +223,7 @@ namespace MikeSchweitzer.WebSocket.Internal
             }
         }
 
-        private async Task ReceiveAsync()
+        private async Task ReceiveLoopAsync()
         {
             var buffer = new ArraySegment<byte>(new byte[_maxReceiveBytes]);
             while (_socket.State == System.Net.WebSockets.WebSocketState.Open)
@@ -277,29 +281,22 @@ namespace MikeSchweitzer.WebSocket.Internal
             }
         }
 
-        private async Task SendAsync()
+        private async Task SendLoopAsync()
         {
             while (_socket.State == System.Net.WebSockets.WebSocketState.Open)
             {
-                WebSocketMessage message = null;
-
-                lock (_outgoingMessages)
+                while (_outgoingMessages.Count > 0)
                 {
-                    if (_outgoingMessages.Count > 0)
-                        message = _outgoingMessages.Dequeue();
+                    var message = _outgoingMessages.Dequeue();
+
+                    var segment = new ArraySegment<byte>(message.Bytes);
+                    var type = message.Type == WebSocketDataType.Binary
+                        ? WebSocketMessageType.Binary
+                        : WebSocketMessageType.Text;
+                    await _socket.SendAsync(segment, type, endOfMessage: true, _cancellationToken);
                 }
 
-                if (message == null)
-                {
-                    await Task.Delay(10, _cancellationToken);
-                    continue;
-                }
-
-                var segment = new ArraySegment<byte>(message.Bytes);
-                var type = message.Type == WebSocketDataType.Binary
-                    ? WebSocketMessageType.Binary
-                    : WebSocketMessageType.Text;
-                await _socket.SendAsync(segment, type, endOfMessage: true, _cancellationToken);
+                await Task.Yield();
             }
         }
         #endregion
@@ -336,19 +333,19 @@ namespace MikeSchweitzer.WebSocket.Internal
         // this completes as soon as we can return to the main thread
         public TaskAwaiter<bool> GetAwaiter()
         {
-            var tcs = new TaskCompletionSource<bool>();
-            MainThreadAsyncAwaitRunner.Run(Wait(tcs));
-            return tcs.Task.GetAwaiter();
+            var source = new TaskCompletionSource<bool>();
+            MainThreadAsyncAwaitRunner.Run(Wait(source));
+            return source.Task.GetAwaiter();
         }
 
-        private static IEnumerator Wait(TaskCompletionSource<bool> tcs)
+        private static IEnumerator Wait(TaskCompletionSource<bool> source)
         {
             yield return null;
-            tcs.SetResult(true);
+            source.SetResult(true);
         }
     }
 
-    internal class WaitForBackgroundThreadStart
+    internal class WaitForThreadPoolThreadStart
     {
         // this completes as soon as we can start a ThreadPool thread
         public ConfiguredTaskAwaitable.ConfiguredTaskAwaiter GetAwaiter()

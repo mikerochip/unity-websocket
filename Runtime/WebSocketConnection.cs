@@ -135,7 +135,13 @@ namespace MikeSchweitzer.WebSocket
         private async void Awake()
         {
             _cts = new CancellationTokenSource();
-            await Task.WhenAll(ManageStateAsync(), ConnectAsync(), ReceiveAsync(), SendAsync());
+            await Task.WhenAll(ManageStateAsync(), ConnectAsync());
+        }
+
+        private void Update()
+        {
+            ReceiveIncomingMessages();
+            SendOutgoingMessages();
         }
 
         private void OnDestroy()
@@ -226,45 +232,29 @@ namespace MikeSchweitzer.WebSocket
             }
         }
 
-        private async Task ReceiveAsync()
+        private void ReceiveIncomingMessages()
         {
-            while (true)
-            {
-                if (_cts.IsCancellationRequested)
-                    break;
-
-                if (_webSocket?.State == Internal.WebSocketState.Open)
-                    _webSocket.ProcessIncomingMessages();
-
-                await Task.Yield();
-            }
+            if (_webSocket?.State == Internal.WebSocketState.Open)
+                _webSocket.ProcessIncomingMessages();
         }
 
-        private async Task SendAsync()
+        private void SendOutgoingMessages()
         {
-            while (true)
+            if (_webSocket?.State == Internal.WebSocketState.Open && IsPinging)
             {
-                if (_cts.IsCancellationRequested)
-                    break;
-
-                if (_webSocket?.State == Internal.WebSocketState.Open && IsPinging)
+                var now = DateTime.Now;
+                var timeSinceLastPing = now - _lastPingTimestamp;
+                if (timeSinceLastPing >= Config.PingInterval)
                 {
-                    var now = DateTime.Now;
-                    var timeSinceLastPing = now - _lastPingTimestamp;
-                    if (timeSinceLastPing >= Config.PingInterval)
-                    {
-                        _webSocket.AddOutgoingMessage(Config.PingMessage);
-                        _lastPingTimestamp = now;
-                    }
+                    _webSocket.AddOutgoingMessage(Config.PingMessage);
+                    _lastPingTimestamp = now;
                 }
+            }
 
-                while (_webSocket?.State == Internal.WebSocketState.Open && _outgoingMessages.Count > 0)
-                {
-                    var message = _outgoingMessages.Dequeue();
-                    _webSocket.AddOutgoingMessage(message);
-                }
-
-                await Task.Yield();
+            while (_webSocket?.State == Internal.WebSocketState.Open && _outgoingMessages.Count > 0)
+            {
+                var message = _outgoingMessages.Dequeue();
+                _webSocket.AddOutgoingMessage(message);
             }
         }
         #endregion
