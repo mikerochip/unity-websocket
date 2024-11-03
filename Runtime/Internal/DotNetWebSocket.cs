@@ -203,13 +203,13 @@ namespace MikeSchweitzer.WebSocket.Internal
         #region Internal Methods
         private async Task PumpMessagesAsync()
         {
-            await Task.WhenAll(ReceiveOnThreadAsync(), SendLoopAsync());
+            await Task.WhenAll(ThreadedReceiveLoopAsync(), SendLoopAsync());
         }
 
-        private async Task ReceiveOnThreadAsync()
+        private async Task ThreadedReceiveLoopAsync()
         {
             // _socket.ReceiveAsync() is a blocking call, and we don't want to block the main
-            // thread so we put that on a thread pool thread
+            // thread, so we need to put it on a separate thread
             await new WaitForThreadPoolThreadStart();
 
             try
@@ -218,7 +218,8 @@ namespace MikeSchweitzer.WebSocket.Internal
             }
             finally
             {
-                // return to the main thread before leaving
+                // return to the main thread before leaving to guarantee we can make
+                // Unity API calls from the call site, once again
                 await new WaitForMainThreadUpdate();
             }
         }
@@ -261,10 +262,7 @@ namespace MikeSchweitzer.WebSocket.Internal
                     }
 
                     if (result.CloseStatus != null)
-                    {
-                        await _socket.CloseAsync(result.CloseStatus.Value, result.CloseStatusDescription, CancellationToken.None);
                         break;
-                    }
 
                     if (byteCount > _maxReceiveBytes)
                         continue;
@@ -285,7 +283,7 @@ namespace MikeSchweitzer.WebSocket.Internal
         {
             while (_socket.State == System.Net.WebSockets.WebSocketState.Open)
             {
-                while (_outgoingMessages.Count > 0)
+                while (_outgoingMessages.Count > 0 && _socket.State == System.Net.WebSockets.WebSocketState.Open)
                 {
                     var message = _outgoingMessages.Dequeue();
 
@@ -302,55 +300,74 @@ namespace MikeSchweitzer.WebSocket.Internal
         #endregion
     }
 
-    internal class MainThreadAsyncAwaitRunner : MonoBehaviour
+    // this completes as soon as a ThreadPool thread starts
+    internal class WaitForThreadPoolThreadStart
     {
-        private static MainThreadAsyncAwaitRunner Instance { get; set; }
-        private static SynchronizationContext SynchronizationContext { get; set; }
+        public ConfiguredTaskAwaitable.ConfiguredTaskAwaiter GetAwaiter()
+        {
+            return Task.Run(() => {}).ConfigureAwait(false).GetAwaiter();
+        }
+    }
+
+    // this completes as soon as the main thread returns from a coroutine yield
+    internal class WaitForMainThreadUpdate : INotifyCompletion
+    {
+        #region Private Fields
+        private Action _continuation;
+        #endregion
+
+        #region INotifyCompletion Overrides
+        public void OnCompleted(Action continuation)
+        {
+            _continuation = continuation;
+        }
+        #endregion
+
+        #region await Support
+        public bool IsCompleted { get; private set; }
+        public void GetResult() { }
+        public WaitForMainThreadUpdate GetAwaiter()
+        {
+            MainThreadCoroutineRunner.Run(CompleteAfterYieldAsync());
+            return this;
+        }
+        #endregion
+
+        #region Helper Methods
+        private IEnumerator CompleteAfterYieldAsync()
+        {
+            yield return null;
+            IsCompleted = true;
+            _continuation?.Invoke();
+        }
+        #endregion
+    }
+
+    internal class MainThreadCoroutineRunner : MonoBehaviour
+    {
+        private static MainThreadCoroutineRunner Instance { get; set; }
+        private static SynchronizationContext MainThreadSyncContext { get; set; }
+
+        private void Awake()
+        {
+            DontDestroyOnLoad(gameObject);
+            // this behavior is supposed to be an invisible helper utility to
+            // enable awaited tasks on threads to return to the main thread, so
+            // we really do not want it to clutter the hierarchy
+            gameObject.hideFlags = HideFlags.HideAndDontSave;
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Initialize()
         {
-            var go = new GameObject(nameof(MainThreadAsyncAwaitRunner));
-            Instance = go.AddComponent<MainThreadAsyncAwaitRunner>();
-            SynchronizationContext = SynchronizationContext.Current;
+            var go = new GameObject(nameof(MainThreadCoroutineRunner));
+            Instance = go.AddComponent<MainThreadCoroutineRunner>();
+            MainThreadSyncContext = SynchronizationContext.Current;
         }
 
-        public static void Run(IEnumerator routine)
+        internal static void Run(IEnumerator coroutine)
         {
-            SynchronizationContext.Post(_ => Instance.StartCoroutine(routine), null);
-        }
-
-        private void Awake()
-        {
-            // make the object persist, but don't let it clutter the hierarchy
-            DontDestroyOnLoad(gameObject);
-            gameObject.hideFlags = HideFlags.HideAndDontSave;
-        }
-    }
-
-    internal class WaitForMainThreadUpdate
-    {
-        // this completes as soon as we can return to the main thread
-        public TaskAwaiter<bool> GetAwaiter()
-        {
-            var source = new TaskCompletionSource<bool>();
-            MainThreadAsyncAwaitRunner.Run(Wait(source));
-            return source.Task.GetAwaiter();
-        }
-
-        private static IEnumerator Wait(TaskCompletionSource<bool> source)
-        {
-            yield return null;
-            source.SetResult(true);
-        }
-    }
-
-    internal class WaitForThreadPoolThreadStart
-    {
-        // this completes as soon as we can start a ThreadPool thread
-        public ConfiguredTaskAwaitable.ConfiguredTaskAwaiter GetAwaiter()
-        {
-            return Task.Run(() => {}).ConfigureAwait(false).GetAwaiter();
+            MainThreadSyncContext.Post(_ => Instance.StartCoroutine(coroutine), null);
         }
     }
 }
