@@ -182,7 +182,22 @@ namespace MikeSchweitzer.WebSocket.Internal
             switch (_socket.State)
             {
                 case System.Net.WebSockets.WebSocketState.Open:
-                    await _socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None);
+                    // We have to handle a case where the socket state can be open and
+                    // the server decides to close the socket before completing the close
+                    // handshake (e.g. server suddenly becomes unavailable). Exception is:
+                    //
+                    // System.Net.WebSockets.WebSocketException (0x80004005): The remote party closed the WebSocket connection without completing the close handshake.
+                    // ---> System.IO.IOException: Unable to read data from the transport connection: interrupted.
+                    // ---> System.Net.Sockets.SocketException: interrupted
+                    try
+                    {
+                        await _socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None);
+                    }
+                    catch (Exception e)
+                    {
+                        Error?.Invoke(e.Message);
+                        _cancellationTokenSource.Cancel();
+                    }
                     break;
 
                 case System.Net.WebSockets.WebSocketState.Connecting:

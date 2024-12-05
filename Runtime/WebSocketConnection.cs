@@ -40,7 +40,7 @@ namespace MikeSchweitzer.WebSocket
         #endregion
 
         #region Private Fields
-        private CancellationTokenSource _cts;
+        private CancellationTokenSource _cancellationTokenSource;
         private IWebSocket _webSocket;
         private Task _connectTask;
         private DateTime _lastPingTimestamp;
@@ -134,7 +134,7 @@ namespace MikeSchweitzer.WebSocket
         #region Unity Methods
         private async void Awake()
         {
-            _cts = new CancellationTokenSource();
+            _cancellationTokenSource = new CancellationTokenSource();
             await Task.WhenAll(ManageStateAsync(), ConnectAsync());
         }
 
@@ -146,7 +146,7 @@ namespace MikeSchweitzer.WebSocket
 
         private void OnDestroy()
         {
-            _cts.Cancel();
+            _cancellationTokenSource.Cancel();
 
             if (State == WebSocketState.Connecting || State == WebSocketState.Connected)
                 ChangeState(WebSocketState.Disconnecting);
@@ -154,7 +154,7 @@ namespace MikeSchweitzer.WebSocket
 
         private void OnApplicationQuit()
         {
-            _cts.Cancel();
+            _cancellationTokenSource.Cancel();
 
             if (State != WebSocketState.Connecting && State != WebSocketState.Connected)
                 return;
@@ -183,7 +183,7 @@ namespace MikeSchweitzer.WebSocket
 
                 // cancellations only happen when destroying or shutting down, so we don't need to
                 // process desired states afterward
-                if (_cts.IsCancellationRequested)
+                if (_cancellationTokenSource.IsCancellationRequested)
                     break;
 
                 if (DesiredState == WebSocketDesiredState.Connect)
@@ -222,7 +222,7 @@ namespace MikeSchweitzer.WebSocket
         {
             while (true)
             {
-                if (_cts.IsCancellationRequested)
+                if (_cancellationTokenSource.IsCancellationRequested)
                     break;
 
                 if (_connectTask != null)
@@ -282,7 +282,7 @@ namespace MikeSchweitzer.WebSocket
             if (_webSocket == null)
                 return;
 
-            if (_cts.IsCancellationRequested)
+            if (_cancellationTokenSource.IsCancellationRequested)
                 _webSocket.Cancel();
             else
                 await _webSocket.CloseAsync();
