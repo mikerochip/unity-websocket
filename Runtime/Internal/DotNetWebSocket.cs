@@ -178,6 +178,8 @@ namespace MikeSchweitzer.WebSocket.Internal
         {
             if (_socket == null)
                 return;
+            if (_socket.CloseStatus != null)
+                return;
 
             switch (_socket.State)
             {
@@ -185,7 +187,7 @@ namespace MikeSchweitzer.WebSocket.Internal
                     // We have to handle a case where the socket state can be open and
                     // the server decides to close the socket before completing the close
                     // handshake (e.g. server suddenly becomes unavailable). Exception is:
-                    //
+                    // 
                     // System.Net.WebSockets.WebSocketException (0x80004005): The remote party closed the WebSocket connection without completing the close handshake.
                     // ---> System.IO.IOException: Unable to read data from the transport connection: interrupted.
                     // ---> System.Net.Sockets.SocketException: interrupted
