@@ -184,13 +184,22 @@ namespace MikeSchweitzer.WebSocket.Internal
             switch (_socket.State)
             {
                 case System.Net.WebSockets.WebSocketState.Open:
-                    // We have to handle a case where the socket state can be open and
+                    // We have to handle a case where the socket state can be open AND
                     // the server decides to close the socket before completing the close
                     // handshake (e.g. server suddenly becomes unavailable). Exception is:
-                    // 
+                    //
                     // System.Net.WebSockets.WebSocketException (0x80004005): The remote party closed the WebSocket connection without completing the close handshake.
                     // ---> System.IO.IOException: Unable to read data from the transport connection: interrupted.
                     // ---> System.Net.Sockets.SocketException: interrupted
+                    // --- End of inner exception stack trace ---
+                    // at System.Net.Sockets.Socket+AwaitableSocketAsyncEventArgs.ThrowException (System.Net.Sockets.SocketError error) [0x00007] in <14b82fe9461f4a63a5f031a62c71f4f3>:0
+                    // at System.Net.Sockets.Socket+AwaitableSocketAsyncEventArgs.GetResult (System.Int16 token) [0x00022] in <14b82fe9461f4a63a5f031a62c71f4f3>:0
+                    // at System.Threading.Tasks.ValueTask`1[TResult].get_Result () [0x0002e] in <c816f303bdad4e9a8d8dabcc4fd172eb>:0
+                    // at System.Net.WebSockets.ManagedWebSocket.EnsureBufferContainsAsync (System.Int32 minimumRequiredBytes, System.Threading.CancellationToken cancellationToken, System.Boolean throwOnPrematureClosure) [0x000ff] in <14b82fe9461f4a63a5f031a62c71f4f3>:0
+                    // at System.Net.WebSockets.ManagedWebSocket.ReceiveAsyncPrivate[TWebSocketReceiveResultGetter,TWebSocketReceiveResult] (System.Memory`1[T] payloadBuffer, System.Threading.CancellationToken cancellationToken, TWebSocketReceiveResultGetter resultGetter) [0x0010d] in <14b82fe9461f4a63a5f031a62c71f4f3>:0
+                    // at System.Net.WebSockets.ManagedWebSocket.ReceiveAsyncPrivate[TWebSocketReceiveResultGetter,TWebSocketReceiveResult] (System.Memory`1[T] payloadBuffer, System.Threading.CancellationToken cancellationToken, TWebSocketReceiveResultGetter resultGetter) [0x00788] in <14b82fe9461f4a63a5f031a62c71f4f3>:0
+                    // at System.Net.WebSockets.ManagedWebSocket.CloseAsyncPrivate (System.Net.WebSockets.WebSocketCloseStatus closeStatus, System.String statusDescription, System.Threading.CancellationToken cancellationToken) [0x00169] in <14b82fe9461f4a63a5f031a62c71f4f3>:0
+                    // at MikeSchweitzer.WebSocket.Internal.DotNetWebSocket.CloseAsync () [0x00080] in ...
                     try
                     {
                         await _socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None);
