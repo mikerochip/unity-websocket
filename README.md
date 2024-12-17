@@ -7,11 +7,11 @@
 # Features
 
 * Easy to use
-   * **`async/await` is optional, not required**: use event listeners, coroutines, or polling
-   * **Doesn't force `#if` for WebGL**: no conditional-compilation required
    * `WebSocketConnection` is just a `MonoBehaviour`
+   * Using `async/await` is optional: event listeners, coroutines, and polling are supported
+   * Doesn't force `#if` for WebGL: no conditional-compilation required
    * Public API prevents you from corrupting an active connection
-   * `WebSocketConnection` is reusable: connect, disconnect, change URL, connect again, etc
+   * Reusable: connect, disconnect, change URL, connect again from one `WebSocketConnection`
 * Flexible config
    * URL is the only required config
    * Sane defaults
@@ -257,11 +257,10 @@ private async Task ReceiveMessagesAsync()
 
 ## Customizable Ping-Pong Support
 
-.NET has built-in ping-pong support, implementing [the WebSocket spec](https://datatracker.ietf.org/doc/html/rfc6455#section-5.5.2). WebGL (specifically, JavaScript) does not.
+This package has a custom ping-pong system that you can use regardless of platform.
 
-Use this for ping-pong support that you can write once for web or non-web client builds.
-
-⚠️ Your server must be configured to echo messages of the same message type (text or binary) and content.
+⚠️ Your server must be configured to echo messages of the same message type (text or binary) and content.\
+⚠️ This package has custom ping-pong support because the JavaScript WebSocket client does not implement [the WebSocket Ping Pong spec](https://datatracker.ietf.org/doc/html/rfc6455#section-5.5.2) even though .NET's `WebSocketClient` does implement the spec.
 
 ```CSharp
 private void ConfigureStringPings()
