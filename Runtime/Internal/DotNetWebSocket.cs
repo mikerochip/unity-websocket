@@ -34,6 +34,7 @@ namespace MikeSchweitzer.WebSocket.Internal
 
         #region IWebSocket Events
         public event OpenedHandler Opened;
+        public event MessageSentHandler MessageSent;
         public event MessageReceivedHandler MessageReceived;
         public event ErrorHandler Error;
         public event ClosedHandler Closed;
@@ -318,6 +319,8 @@ namespace MikeSchweitzer.WebSocket.Internal
                         ? WebSocketMessageType.Binary
                         : WebSocketMessageType.Text;
                     await _socket.SendAsync(segment, type, endOfMessage: true, _cancellationToken);
+
+                    MessageSent?.Invoke(message);
                 }
 
                 await Task.Yield();

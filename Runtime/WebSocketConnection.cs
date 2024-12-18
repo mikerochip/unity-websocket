@@ -22,6 +22,7 @@ namespace MikeSchweitzer.WebSocket
         public WebSocketState State { get; private set; }
         public string ErrorMessage { get; private set; }
         public bool IsPinging => Config?.PingInterval != TimeSpan.Zero && Config?.PingMessage != null;
+        public TimeSpan LastPingPongInterval { get; private set; }
 
         // You probably don't need these and should use methods and events instead. These are
         // here if you really want to manipulate the underlying collections directly.
@@ -33,17 +34,22 @@ namespace MikeSchweitzer.WebSocket
         public delegate void StateChangedHandler(WebSocketConnection connection, WebSocketState oldState, WebSocketState newState);
         public delegate void MessageReceivedHandler(WebSocketConnection connection, WebSocketMessage message);
         public delegate void ErrorMessageReceivedHandler(WebSocketConnection connection, string errorMessage);
+        public delegate void PingSentHandler(WebSocketConnection connection, DateTime timestamp);
+        public delegate void PongReceivedHandler(WebSocketConnection connection, DateTime timestamp);
 
         public event StateChangedHandler StateChanged;
         public event MessageReceivedHandler MessageReceived;
         public event ErrorMessageReceivedHandler ErrorMessageReceived;
+        public event PingSentHandler PingSent;
+        public event PongReceivedHandler PongReceived;
         #endregion
 
         #region Private Fields
         private CancellationTokenSource _cancellationTokenSource;
         private IWebSocket _webSocket;
         private Task _connectTask;
-        private DateTime _lastPingTimestamp;
+        private DateTime _lastPingSentTimestamp;
+        private DateTime _lastPongTimestamp;
 
         private readonly Queue<WebSocketMessage> _incomingMessages = new Queue<WebSocketMessage>();
         private readonly Queue<WebSocketMessage> _outgoingMessages = new Queue<WebSocketMessage>();
@@ -140,8 +146,8 @@ namespace MikeSchweitzer.WebSocket
 
         private void Update()
         {
-            ReceiveIncomingMessages();
             SendOutgoingMessages();
+            ReceiveIncomingMessages();
         }
 
         private void OnDestroy()
@@ -243,12 +249,9 @@ namespace MikeSchweitzer.WebSocket
             if (_webSocket?.State == Internal.WebSocketState.Open && IsPinging)
             {
                 var now = DateTime.Now;
-                var timeSinceLastPing = now - _lastPingTimestamp;
-                if (timeSinceLastPing >= Config.PingInterval)
-                {
+                var lastPingInterval = now - _lastPingSentTimestamp;
+                if (lastPingInterval >= Config.PingInterval)
                     _webSocket.AddOutgoingMessage(Config.PingMessage);
-                    _lastPingTimestamp = now;
-                }
             }
 
             while (_webSocket?.State == Internal.WebSocketState.Open && _outgoingMessages.Count > 0)
@@ -270,6 +273,7 @@ namespace MikeSchweitzer.WebSocket
                 Config.CanDebugLog,
                 IsPinging);
             _webSocket.Opened += OnOpened;
+            _webSocket.MessageSent += OnMessageSent;
             _webSocket.MessageReceived += OnMessageReceived;
             _webSocket.Closed += OnClosed;
             _webSocket.Error += OnError;
@@ -309,6 +313,7 @@ namespace MikeSchweitzer.WebSocket
             _connectTask = null;
 
             _webSocket.Opened -= OnOpened;
+            _webSocket.MessageSent -= OnMessageSent;
             _webSocket.MessageReceived -= OnMessageReceived;
             _webSocket.Closed -= OnClosed;
             _webSocket.Error -= OnError;
@@ -317,14 +322,30 @@ namespace MikeSchweitzer.WebSocket
 
         private void OnOpened()
         {
-            _lastPingTimestamp = DateTime.Now;
+            _lastPingSentTimestamp = DateTime.Now;
+            _lastPongTimestamp = DateTime.Now;
+            LastPingPongInterval = TimeSpan.Zero;
             ChangeState(WebSocketState.Connected);
+        }
+
+        private void OnMessageSent(WebSocketMessage message)
+        {
+            if (IsPinging && ReferenceEquals(message, Config.PingMessage))
+            {
+                _lastPingSentTimestamp = DateTime.Now;
+                PingSent?.Invoke(this, _lastPingSentTimestamp);
+            }
         }
 
         private void OnMessageReceived(WebSocketMessage message)
         {
             if (IsPinging && message.Equals(Config.PingMessage))
+            {
+                var now = DateTime.Now;
+                LastPingPongInterval = now - _lastPingSentTimestamp;
+                PongReceived?.Invoke(this, now);
                 return;
+            }
 
             // we have to always enqueue the message to ensure the public property IncomingMessages
             // is accurate, even though we want to remove the message if there is at least one
