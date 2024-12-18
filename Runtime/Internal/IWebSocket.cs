@@ -7,6 +7,7 @@ namespace MikeSchweitzer.WebSocket.Internal
     internal interface IWebSocket
     {
         event OpenedHandler Opened;
+        event MessageSentHandler MessageSent;
         event MessageReceivedHandler MessageReceived;
         event ErrorHandler Error;
         event ClosedHandler Closed;
@@ -21,6 +22,7 @@ namespace MikeSchweitzer.WebSocket.Internal
     }
 
     internal delegate void OpenedHandler();
+    internal delegate void MessageSentHandler(WebSocketMessage message);
     internal delegate void MessageReceivedHandler(WebSocketMessage message);
     internal delegate void ErrorHandler(string errorMessage);
     internal delegate void ClosedHandler(WebSocketCloseCode closeCode);
