@@ -22,6 +22,7 @@ namespace MikeSchweitzer.WebSocket.Internal
 
         #region IWebSocket Events
         public event OpenedHandler Opened;
+        public event MessageSentHandler MessageSent;
         public event MessageReceivedHandler MessageReceived;
         public event ClosedHandler Closed;
         public event ErrorHandler Error;
@@ -107,6 +108,8 @@ namespace MikeSchweitzer.WebSocket.Internal
 
             if (state < 0)
                 Error?.Invoke(JsLibBridge.TranslateCustomErrorState(state));
+            else
+                MessageSent?.Invoke(message);
         }
 
         public Task CloseAsync()
