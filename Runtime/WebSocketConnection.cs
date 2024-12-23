@@ -21,7 +21,7 @@ namespace MikeSchweitzer.WebSocket
         public WebSocketConfig Config { get; private set; }
         public WebSocketState State { get; private set; }
         public string ErrorMessage { get; private set; }
-        public bool IsPinging => Config?.PingInterval != TimeSpan.Zero && Config?.PingMessage != null;
+        public bool IsPinging => Config?.PingMessage != null && Config?.PingInterval != TimeSpan.Zero;
         public TimeSpan LastPingPongInterval { get; private set; }
 
         // You probably don't need these and should use methods and events instead. These are
@@ -49,7 +49,7 @@ namespace MikeSchweitzer.WebSocket
         private IWebSocket _webSocket;
         private Task _connectTask;
         private DateTime _lastPingSentTimestamp;
-        private DateTime _lastPongTimestamp;
+        private DateTime _lastPongReceivedTimestamp;
 
         private readonly Queue<WebSocketMessage> _incomingMessages = new Queue<WebSocketMessage>();
         private readonly Queue<WebSocketMessage> _outgoingMessages = new Queue<WebSocketMessage>();
@@ -248,9 +248,7 @@ namespace MikeSchweitzer.WebSocket
         {
             if (_webSocket?.State == Internal.WebSocketState.Open && IsPinging)
             {
-                var now = DateTime.Now;
-                var lastPingInterval = now - _lastPingSentTimestamp;
-                if (lastPingInterval >= Config.PingInterval)
+                if (ShouldSendPing())
                     _webSocket.AddOutgoingMessage(Config.PingMessage);
             }
 
@@ -323,8 +321,9 @@ namespace MikeSchweitzer.WebSocket
         private void OnOpened()
         {
             _lastPingSentTimestamp = DateTime.Now;
-            _lastPongTimestamp = DateTime.Now;
+            _lastPongReceivedTimestamp = _lastPingSentTimestamp;
             LastPingPongInterval = TimeSpan.Zero;
+
             ChangeState(WebSocketState.Connected);
         }
 
@@ -341,9 +340,9 @@ namespace MikeSchweitzer.WebSocket
         {
             if (IsPinging && message.Equals(Config.PingMessage))
             {
-                var now = DateTime.Now;
-                LastPingPongInterval = now - _lastPingSentTimestamp;
-                PongReceived?.Invoke(this, now);
+                _lastPongReceivedTimestamp = DateTime.Now;
+                LastPingPongInterval = _lastPongReceivedTimestamp - _lastPingSentTimestamp;
+                PongReceived?.Invoke(this, _lastPongReceivedTimestamp);
                 return;
             }
 
@@ -404,6 +403,22 @@ namespace MikeSchweitzer.WebSocket
                 PingMessage = src.PingMessage?.Clone(),
                 CanDebugLog = src.CanDebugLog,
             };
+        }
+
+        private bool ShouldSendPing()
+        {
+            if (Config.ShouldPingWaitForPong)
+            {
+                if (_lastPongReceivedTimestamp <= _lastPingSentTimestamp)
+                    return false;
+            }
+
+            var now = DateTime.Now;
+            var lastPingInterval = now - _lastPingSentTimestamp;
+            if (lastPingInterval < Config.PingInterval)
+                return false;
+
+            return true;
         }
 
         private void ClearMessageBuffers()
