@@ -10,8 +10,9 @@ namespace MikeSchweitzer.WebSocket
         public Dictionary<string, string> Headers { get; set; }
         public int MaxReceiveBytes { get; set; } = 4096;
         public int MaxSendBytes { get; set; } = 4096;
-        public TimeSpan PingInterval { get; set; } = TimeSpan.Zero;
         public WebSocketMessage PingMessage { get; set; } = new WebSocketMessage("hi");
+        public TimeSpan PingInterval { get; set; } = TimeSpan.Zero;
+        public bool ShouldPingWaitForPong { get; set; }
         public bool CanDebugLog { get; set; }
     }
 }
