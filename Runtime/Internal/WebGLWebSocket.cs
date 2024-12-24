@@ -12,9 +12,11 @@ namespace MikeSchweitzer.WebSocket.Internal
         #region Private Fields
         private readonly int _maxReceiveBytes;
         private readonly int _instanceId;
-        // incoming message buffering isn't strictly necessary, it's for API consistency with
-        // the System.Net.WebSockets path
+        // message buffering isn't strictly necessary, it's for API consistency with DotNet path
+        private readonly Queue<WebSocketMessage> _outgoingMessages = new Queue<WebSocketMessage>();
         private readonly Queue<WebSocketMessage> _incomingMessages = new Queue<WebSocketMessage>();
+        private readonly List<WebSocketMessage> _tempOutgoingMessages = new List<WebSocketMessage>();
+        private readonly List<WebSocketMessage> _tempIncomingMessages = new List<WebSocketMessage>();
 
         private static bool _globalInitialized;
         private static Dictionary<int, WebGLWebSocket> _globalInstanceMap = new Dictionary<int, WebGLWebSocket>();
@@ -79,18 +81,6 @@ namespace MikeSchweitzer.WebSocket.Internal
         #endregion
 
         #region IWebSocket Methods
-        public void ProcessIncomingMessages()
-        {
-            if (_incomingMessages.Count == 0)
-                return;
-
-            var messages = _incomingMessages.ToArray();
-            _incomingMessages.Clear();
-
-            foreach (var message in messages)
-                MessageReceived?.Invoke(message);
-        }
-
         public Task ConnectAsync()
         {
             var state = JsLibBridge.Connect(_instanceId);
@@ -102,14 +92,14 @@ namespace MikeSchweitzer.WebSocket.Internal
 
         public void AddOutgoingMessage(WebSocketMessage message)
         {
-            var state = message.Type == WebSocketDataType.Binary
-                ? JsLibBridge.SendBinary(_instanceId, message.Bytes)
-                : JsLibBridge.SendText(_instanceId, message.String);
+            _outgoingMessages.Enqueue(message);
+        }
 
-            if (state < 0)
-                Error?.Invoke(JsLibBridge.TranslateCustomErrorState(state));
-            else
-                MessageSent?.Invoke(message);
+        public Task ProcessMessagesAsync()
+        {
+            ProcessOutgoingMessages();
+            ProcessIncomingMessages();
+            return Task.CompletedTask;
         }
 
         public Task CloseAsync()
@@ -140,6 +130,46 @@ namespace MikeSchweitzer.WebSocket.Internal
             var state = JsLibBridge.Close(_instanceId, (int)WebSocketCloseCode.Normal);
             if (state < 0)
                 Error?.Invoke(JsLibBridge.TranslateCustomErrorState(state));
+        }
+        #endregion
+
+        #region Message Processing Methods
+        private void ProcessOutgoingMessages()
+        {
+            if (_outgoingMessages.Count == 0)
+                return;
+
+            _tempOutgoingMessages.AddRange(_outgoingMessages);
+            _outgoingMessages.Clear();
+
+            foreach (var message in _tempOutgoingMessages)
+            {
+                if (State != WebSocketState.Open)
+                    break;
+
+                var state = message.Type == WebSocketDataType.Binary
+                    ? JsLibBridge.SendBinary(_instanceId, message.Bytes)
+                    : JsLibBridge.SendText(_instanceId, message.String);
+
+                if (state < 0)
+                    Error?.Invoke(JsLibBridge.TranslateCustomErrorState(state));
+                else
+                    MessageSent?.Invoke(message);
+            }
+            _tempOutgoingMessages.Clear();
+        }
+
+        private void ProcessIncomingMessages()
+        {
+            if (_incomingMessages.Count == 0)
+                return;
+
+            _tempIncomingMessages.AddRange(_incomingMessages);
+            _incomingMessages.Clear();
+
+            foreach (var message in _tempIncomingMessages)
+                MessageReceived?.Invoke(message);
+            _tempIncomingMessages.Clear();
         }
         #endregion
 

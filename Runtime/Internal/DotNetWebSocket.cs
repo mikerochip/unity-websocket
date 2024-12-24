@@ -27,7 +27,8 @@ namespace MikeSchweitzer.WebSocket.Internal
         private readonly Queue<WebSocketMessage> _outgoingMessages = new Queue<WebSocketMessage>();
         private readonly Queue<WebSocketMessage> _incomingMessages = new Queue<WebSocketMessage>();
         private readonly Queue<string> _incomingErrorMessages = new Queue<string>();
-        // temp lists are used to reduce garbage when copying from the locked queues above
+        // temp lists are used to reduce garbage when copying from the queues above
+        private readonly List<WebSocketMessage> _tempOutgoingMessages = new List<WebSocketMessage>();
         private readonly List<WebSocketMessage> _tempIncomingMessages = new List<WebSocketMessage>();
         private readonly List<string> _tempIncomingErrorMessages = new List<string>();
         #endregion
@@ -92,44 +93,6 @@ namespace MikeSchweitzer.WebSocket.Internal
         #endregion
 
         #region IWebSocket Methods
-        public void ProcessIncomingMessages()
-        {
-            lock (_incomingErrorMessages)
-            {
-                if (_incomingErrorMessages.Count > 0)
-                {
-                    _tempIncomingErrorMessages.AddRange(_incomingErrorMessages);
-                    _incomingErrorMessages.Clear();
-                }
-            }
-            if (_tempIncomingErrorMessages.Count > 0)
-            {
-                foreach (var message in _tempIncomingErrorMessages)
-                    Error?.Invoke(message);
-                _tempIncomingErrorMessages.Clear();
-            }
-
-            lock (_incomingMessages)
-            {
-                if (_incomingMessages.Count > 0)
-                {
-                    _tempIncomingMessages.AddRange(_incomingMessages);
-                    _incomingMessages.Clear();
-                }
-            }
-            if (_tempIncomingMessages.Count > 0)
-            {
-                foreach (var message in _tempIncomingMessages)
-                    MessageReceived?.Invoke(message);
-                _tempIncomingMessages.Clear();
-            }
-        }
-
-        public void AddOutgoingMessage(WebSocketMessage message)
-        {
-            _outgoingMessages.Enqueue(message);
-        }
-
         public async Task ConnectAsync()
         {
             _socket = new ClientWebSocket();
@@ -154,7 +117,7 @@ namespace MikeSchweitzer.WebSocket.Internal
                 await _socket.ConnectAsync(_uri, _cancellationToken);
                 Opened?.Invoke();
 
-                await PumpMessagesAsync();
+                await ThreadPoolReceiveLoopAsync();
             }
             catch (Exception e)
             {
@@ -173,6 +136,17 @@ namespace MikeSchweitzer.WebSocket.Internal
                 _socket?.Dispose();
                 _socket = null;
             }
+        }
+
+        public void AddOutgoingMessage(WebSocketMessage message)
+        {
+            _outgoingMessages.Enqueue(message);
+        }
+
+        public async Task ProcessMessagesAsync()
+        {
+            await ProcessOutgoingMessagesAsync();
+            ProcessIncomingMessages();
         }
 
         public async Task CloseAsync()
@@ -227,17 +201,69 @@ namespace MikeSchweitzer.WebSocket.Internal
         }
         #endregion
 
-        #region Internal Methods
-        private async Task PumpMessagesAsync()
+        #region Message Processing Methods
+        private async Task ProcessOutgoingMessagesAsync()
         {
-            await Task.WhenAll(ThreadedReceiveLoopAsync(), SendLoopAsync());
+            if (_outgoingMessages.Count == 0)
+                return;
+
+            _tempOutgoingMessages.AddRange(_outgoingMessages);
+            _outgoingMessages.Clear();
+
+            foreach (var message in _tempOutgoingMessages)
+            {
+                if (_socket.State != System.Net.WebSockets.WebSocketState.Open)
+                    break;
+
+                var segment = new ArraySegment<byte>(message.Bytes);
+                var type = message.Type == WebSocketDataType.Binary
+                    ? WebSocketMessageType.Binary
+                    : WebSocketMessageType.Text;
+                await _socket.SendAsync(segment, type, endOfMessage: true, _cancellationToken);
+
+                MessageSent?.Invoke(message);
+            }
+            _tempOutgoingMessages.Clear();
         }
 
-        private async Task ThreadedReceiveLoopAsync()
+        private void ProcessIncomingMessages()
         {
-            // _socket.ReceiveAsync() is a blocking call, and we don't want to block the main
-            // thread, so we need to put it on a separate thread
-            await new WaitForThreadPoolThreadStart();
+            lock (_incomingErrorMessages)
+            {
+                if (_incomingErrorMessages.Count > 0)
+                {
+                    _tempIncomingErrorMessages.AddRange(_incomingErrorMessages);
+                    _incomingErrorMessages.Clear();
+                }
+            }
+            if (_tempIncomingErrorMessages.Count > 0)
+            {
+                foreach (var message in _tempIncomingErrorMessages)
+                    Error?.Invoke(message);
+                _tempIncomingErrorMessages.Clear();
+            }
+
+            lock (_incomingMessages)
+            {
+                if (_incomingMessages.Count > 0)
+                {
+                    _tempIncomingMessages.AddRange(_incomingMessages);
+                    _incomingMessages.Clear();
+                }
+            }
+            if (_tempIncomingMessages.Count > 0)
+            {
+                foreach (var message in _tempIncomingMessages)
+                    MessageReceived?.Invoke(message);
+                _tempIncomingMessages.Clear();
+            }
+        }
+
+        // _socket.ReceiveAsync() is a blocking call, and we don't want to block the main
+        // thread, so we need to put it on a ThreadPool thread
+        private async Task ThreadPoolReceiveLoopAsync()
+        {
+            await new WaitForThreadPoolRun();
 
             try
             {
@@ -305,32 +331,12 @@ namespace MikeSchweitzer.WebSocket.Internal
                 }
             }
         }
-
-        private async Task SendLoopAsync()
-        {
-            while (_socket.State == System.Net.WebSockets.WebSocketState.Open)
-            {
-                while (_outgoingMessages.Count > 0 && _socket.State == System.Net.WebSockets.WebSocketState.Open)
-                {
-                    var message = _outgoingMessages.Dequeue();
-
-                    var segment = new ArraySegment<byte>(message.Bytes);
-                    var type = message.Type == WebSocketDataType.Binary
-                        ? WebSocketMessageType.Binary
-                        : WebSocketMessageType.Text;
-                    await _socket.SendAsync(segment, type, endOfMessage: true, _cancellationToken);
-
-                    MessageSent?.Invoke(message);
-                }
-
-                await Task.Yield();
-            }
-        }
         #endregion
     }
 
+    #region Thread Management
     // this completes as soon as a ThreadPool thread starts
-    internal class WaitForThreadPoolThreadStart
+    internal class WaitForThreadPoolRun
     {
         public ConfiguredTaskAwaitable.ConfiguredTaskAwaiter GetAwaiter()
         {
@@ -372,6 +378,7 @@ namespace MikeSchweitzer.WebSocket.Internal
         #endregion
     }
 
+    // this enables running a coroutine on the main thread regardless of the caller's thread
     internal class MainThreadCoroutineRunner : MonoBehaviour
     {
         private static MainThreadCoroutineRunner Instance { get; set; }
@@ -399,4 +406,5 @@ namespace MikeSchweitzer.WebSocket.Internal
             MainThreadSyncContext.Post(_ => Instance.StartCoroutine(coroutine), null);
         }
     }
+    #endregion
 }

@@ -12,6 +12,8 @@ namespace MikeSchweitzer.WebSocket
         public int MaxSendBytes { get; set; } = 4096;
         public WebSocketMessage PingMessage { get; set; } = new WebSocketMessage("hi");
         public TimeSpan PingInterval { get; set; } = TimeSpan.Zero;
+        // Enable ShouldPingWaitForPong to get strict, matching ping-pongs. Makes
+        // LastPingPongInterval more accurate for round-trip-time measurements.
         public bool ShouldPingWaitForPong { get; set; }
         public bool CanDebugLog { get; set; }
     }

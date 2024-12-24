@@ -22,12 +22,13 @@ namespace MikeSchweitzer.WebSocket
         public WebSocketState State { get; private set; }
         public string ErrorMessage { get; private set; }
         public bool IsPinging => Config?.PingMessage != null && Config?.PingInterval != TimeSpan.Zero;
+        // This property is set just before a PongReceived event. Enable ShouldPingWaitForPong
+        // to get a more useful result for round-trip-time measurements.
         public TimeSpan LastPingPongInterval { get; private set; }
 
         // You probably don't need these and should use methods and events instead. These are
         // here if you really want to manipulate the underlying collections directly.
         public IEnumerable<WebSocketMessage> IncomingMessages => _incomingMessages;
-        public IEnumerable<WebSocketMessage> OutgoingMessages => _outgoingMessages;
         #endregion
 
         #region Public Events
@@ -48,11 +49,11 @@ namespace MikeSchweitzer.WebSocket
         private CancellationTokenSource _cancellationTokenSource;
         private IWebSocket _webSocket;
         private Task _connectTask;
+        private DateTime _lastPingQueuedTimestamp;
         private DateTime _lastPingSentTimestamp;
         private DateTime _lastPongReceivedTimestamp;
 
-        private readonly Queue<WebSocketMessage> _incomingMessages = new Queue<WebSocketMessage>();
-        private readonly Queue<WebSocketMessage> _outgoingMessages = new Queue<WebSocketMessage>();
+        private readonly List<WebSocketMessage> _incomingMessages = new List<WebSocketMessage>();
         #endregion
 
         #region Public API
@@ -105,7 +106,7 @@ namespace MikeSchweitzer.WebSocket
                 return;
             }
 
-            _outgoingMessages.Enqueue(message);
+            _webSocket.AddOutgoingMessage(message);
         }
 
         public bool TryRemoveIncomingMessage(out string message)
@@ -114,7 +115,8 @@ namespace MikeSchweitzer.WebSocket
             if (_incomingMessages.Count == 0)
                 return false;
 
-            var result = _incomingMessages.Dequeue();
+            var result = _incomingMessages[0];
+            _incomingMessages.RemoveAt(0);
             message = result.String;
             return true;
         }
@@ -125,7 +127,8 @@ namespace MikeSchweitzer.WebSocket
             if (_incomingMessages.Count == 0)
                 return false;
 
-            var result = _incomingMessages.Dequeue();
+            var result = _incomingMessages[0];
+            _incomingMessages.RemoveAt(0);
             message = result.Bytes;
             return true;
         }
@@ -141,13 +144,15 @@ namespace MikeSchweitzer.WebSocket
         private async void Awake()
         {
             _cancellationTokenSource = new CancellationTokenSource();
-            await Task.WhenAll(ManageStateAsync(), ConnectAsync());
+            await Task.WhenAll(MainLoopAsync(), ConnectAsync());
         }
 
-        private void Update()
+        private async void Update()
         {
-            SendOutgoingMessages();
-            ReceiveIncomingMessages();
+            if (_webSocket == null)
+                return;
+
+            await _webSocket.ProcessMessagesAsync();
         }
 
         private void OnDestroy()
@@ -172,8 +177,8 @@ namespace MikeSchweitzer.WebSocket
         }
         #endregion
 
-        #region Internal Async Management
-        private async Task ManageStateAsync()
+        #region Message Loop Methods
+        private async Task MainLoopAsync()
         {
             while (true)
             {
@@ -185,6 +190,10 @@ namespace MikeSchweitzer.WebSocket
                     // clear messages after state change so messages are available to event listeners
                     ChangeState(WebSocketState.Disconnected);
                     ClearMessageBuffers();
+                }
+                else if (State == WebSocketState.Connected)
+                {
+                    SendPing();
                 }
 
                 // cancellations only happen when destroying or shutting down, so we don't need to
@@ -226,11 +235,8 @@ namespace MikeSchweitzer.WebSocket
 
         private async Task ConnectAsync()
         {
-            while (true)
+            while (!_cancellationTokenSource.IsCancellationRequested)
             {
-                if (_cancellationTokenSource.IsCancellationRequested)
-                    break;
-
                 if (_connectTask != null)
                     await _connectTask;
 
@@ -238,25 +244,19 @@ namespace MikeSchweitzer.WebSocket
             }
         }
 
-        private void ReceiveIncomingMessages()
+        private void SendPing()
         {
-            if (_webSocket?.State == Internal.WebSocketState.Open)
-                _webSocket.ProcessIncomingMessages();
-        }
+            if (State != WebSocketState.Connected)
+                return;
+            if (!IsPinging)
+                return;
 
-        private void SendOutgoingMessages()
-        {
-            if (_webSocket?.State == Internal.WebSocketState.Open && IsPinging)
-            {
-                if (ShouldSendPing())
-                    _webSocket.AddOutgoingMessage(Config.PingMessage);
-            }
+            var now = DateTime.Now;
+            if (!ShouldSendPing(now))
+                return;
 
-            while (_webSocket?.State == Internal.WebSocketState.Open && _outgoingMessages.Count > 0)
-            {
-                var message = _outgoingMessages.Dequeue();
-                _webSocket.AddOutgoingMessage(message);
-            }
+            _lastPingQueuedTimestamp = now;
+            _webSocket.AddOutgoingMessage(Config.PingMessage);
         }
         #endregion
 
@@ -320,8 +320,10 @@ namespace MikeSchweitzer.WebSocket
 
         private void OnOpened()
         {
-            _lastPingSentTimestamp = DateTime.Now;
-            _lastPongReceivedTimestamp = _lastPingSentTimestamp;
+            var now = DateTime.Now;
+            _lastPingQueuedTimestamp = now;
+            _lastPingSentTimestamp = now;
+            _lastPongReceivedTimestamp = now;
             LastPingPongInterval = TimeSpan.Zero;
 
             ChangeState(WebSocketState.Connected);
@@ -347,9 +349,9 @@ namespace MikeSchweitzer.WebSocket
             }
 
             // we have to always enqueue the message to ensure the public property IncomingMessages
-            // is accurate, even though we want to remove the message if there is at least one
-            // event listener
-            _incomingMessages.Enqueue(message);
+            // is accurate, even though we want to remove the message immediately if there is at
+            // least one event listener
+            _incomingMessages.Add(message);
             if (MessageReceived == null)
                 return;
 
@@ -360,18 +362,7 @@ namespace MikeSchweitzer.WebSocket
             if (_incomingMessages.Count == 0)
                 return;
 
-            // remove the last element of the queue by re-queueing all but the last one, which is
-            // not the most efficient use of CPU, but:
-            // 1. does not generate as much garbage over time as a LinkedList
-            // 2. saves memory vs having another queue just to store the last element
-            // 3. maintains API ergonomics for the public property IncomingMessages
-            while (true)
-            {
-                var firstMessage = _incomingMessages.Dequeue();
-                if (ReferenceEquals(firstMessage, message))
-                    break;
-                _incomingMessages.Enqueue(firstMessage);
-            }
+            _incomingMessages.RemoveAt(_incomingMessages.Count - 1);
         }
 
         private void OnClosed(WebSocketCloseCode closeCode)
@@ -405,7 +396,7 @@ namespace MikeSchweitzer.WebSocket
             };
         }
 
-        private bool ShouldSendPing()
+        private bool ShouldSendPing(DateTime now)
         {
             if (Config.ShouldPingWaitForPong)
             {
@@ -413,8 +404,7 @@ namespace MikeSchweitzer.WebSocket
                     return false;
             }
 
-            var now = DateTime.Now;
-            var lastPingInterval = now - _lastPingSentTimestamp;
+            var lastPingInterval = now - _lastPingQueuedTimestamp;
             if (lastPingInterval < Config.PingInterval)
                 return false;
 
@@ -424,7 +414,6 @@ namespace MikeSchweitzer.WebSocket
         private void ClearMessageBuffers()
         {
             _incomingMessages.Clear();
-            _outgoingMessages.Clear();
         }
 
         private void ChangeState(WebSocketState newState)

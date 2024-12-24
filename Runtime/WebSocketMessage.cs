@@ -54,6 +54,11 @@ namespace MikeSchweitzer.WebSocket
         #endregion
 
         #region System.Object Overrides
+        public override string ToString()
+        {
+            return String;
+        }
+
         public override bool Equals(object obj)
         {
             if (!(obj is WebSocketMessage other))
