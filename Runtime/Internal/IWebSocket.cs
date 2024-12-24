@@ -14,9 +14,9 @@ namespace MikeSchweitzer.WebSocket.Internal
 
         WebSocketState State { get; }
 
-        void ProcessIncomingMessages();
-        void AddOutgoingMessage(WebSocketMessage message);
         Task ConnectAsync();
+        void AddOutgoingMessage(WebSocketMessage message);
+        Task ProcessMessagesAsync();
         Task CloseAsync();
         void Cancel();
     }
@@ -32,7 +32,7 @@ namespace MikeSchweitzer.WebSocket.Internal
         Connecting,
         Open,
         Closing,
-        Closed
+        Closed,
     }
 
     // see https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent/code
