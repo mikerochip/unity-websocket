@@ -146,7 +146,11 @@ namespace MikeSchweitzer.WebSocket.Internal
         public async Task ProcessMessagesAsync()
         {
             await ProcessOutgoingMessagesAsync();
-            ProcessIncomingMessages();
+            // If we have _tempOutgoingMessages, that means we're currently processing outgoing
+            // messages. We always want to process outstanding outgoing before incoming messages,
+            // so we want to wait for that to finish first.
+            if (_tempOutgoingMessages.Count == 0)
+                ProcessIncomingMessages();
         }
 
         public async Task CloseAsync()
