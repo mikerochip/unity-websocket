@@ -28,9 +28,9 @@ namespace MikeSchweitzer.WebSocket.Internal
         private readonly Queue<WebSocketMessage> _incomingMessages = new Queue<WebSocketMessage>();
         private readonly Queue<string> _incomingErrorMessages = new Queue<string>();
         // temp lists are used to reduce garbage when copying from the queues above
-        private readonly List<WebSocketMessage> _tempOutgoingMessages = new List<WebSocketMessage>();
-        private readonly List<WebSocketMessage> _tempIncomingMessages = new List<WebSocketMessage>();
-        private readonly List<string> _tempIncomingErrorMessages = new List<string>();
+        private readonly List<WebSocketMessage> _workingOutgoingMessages = new List<WebSocketMessage>();
+        private readonly List<WebSocketMessage> _workingIncomingMessages = new List<WebSocketMessage>();
+        private readonly List<string> _workingIncomingErrorMessages = new List<string>();
         #endregion
 
         #region IWebSocket Events
@@ -131,6 +131,7 @@ namespace MikeSchweitzer.WebSocket.Internal
                     : WebSocketHelpers.ConvertCloseCode((int)_socket.CloseStatus);
                 Closed?.Invoke(closeCode);
 
+                ClearMessages();
                 _cancellationTokenSource = new CancellationTokenSource();
                 _cancellationToken = _cancellationTokenSource.Token;
                 _socket?.Dispose();
@@ -149,7 +150,7 @@ namespace MikeSchweitzer.WebSocket.Internal
             // If we have _tempOutgoingMessages, that means we're currently processing outgoing
             // messages. We always want to process outstanding outgoing before incoming messages,
             // so we want to wait for that to finish first.
-            if (_tempOutgoingMessages.Count == 0)
+            if (_workingOutgoingMessages.Count == 0)
                 ProcessIncomingMessages();
         }
 
@@ -211,10 +212,10 @@ namespace MikeSchweitzer.WebSocket.Internal
             if (_outgoingMessages.Count == 0)
                 return;
 
-            _tempOutgoingMessages.AddRange(_outgoingMessages);
+            _workingOutgoingMessages.AddRange(_outgoingMessages);
             _outgoingMessages.Clear();
 
-            foreach (var message in _tempOutgoingMessages)
+            foreach (var message in _workingOutgoingMessages)
             {
                 if (_socket.State != System.Net.WebSockets.WebSocketState.Open)
                     break;
@@ -227,7 +228,7 @@ namespace MikeSchweitzer.WebSocket.Internal
 
                 MessageSent?.Invoke(message);
             }
-            _tempOutgoingMessages.Clear();
+            _workingOutgoingMessages.Clear();
         }
 
         private void ProcessIncomingMessages()
@@ -236,30 +237,30 @@ namespace MikeSchweitzer.WebSocket.Internal
             {
                 if (_incomingErrorMessages.Count > 0)
                 {
-                    _tempIncomingErrorMessages.AddRange(_incomingErrorMessages);
+                    _workingIncomingErrorMessages.AddRange(_incomingErrorMessages);
                     _incomingErrorMessages.Clear();
                 }
             }
-            if (_tempIncomingErrorMessages.Count > 0)
+            if (_workingIncomingErrorMessages.Count > 0)
             {
-                foreach (var message in _tempIncomingErrorMessages)
+                foreach (var message in _workingIncomingErrorMessages)
                     Error?.Invoke(message);
-                _tempIncomingErrorMessages.Clear();
+                _workingIncomingErrorMessages.Clear();
             }
 
             lock (_incomingMessages)
             {
                 if (_incomingMessages.Count > 0)
                 {
-                    _tempIncomingMessages.AddRange(_incomingMessages);
+                    _workingIncomingMessages.AddRange(_incomingMessages);
                     _incomingMessages.Clear();
                 }
             }
-            if (_tempIncomingMessages.Count > 0)
+            if (_workingIncomingMessages.Count > 0)
             {
-                foreach (var message in _tempIncomingMessages)
+                foreach (var message in _workingIncomingMessages)
                     MessageReceived?.Invoke(message);
-                _tempIncomingMessages.Clear();
+                _workingIncomingMessages.Clear();
             }
         }
 
@@ -334,6 +335,15 @@ namespace MikeSchweitzer.WebSocket.Internal
                         _incomingMessages.Enqueue(message);
                 }
             }
+        }
+
+        private void ClearMessages()
+        {
+            _outgoingMessages.Clear();
+            lock (_incomingMessages)
+                _incomingMessages.Clear();
+            _workingOutgoingMessages.Clear();
+            _workingIncomingMessages.Clear();
         }
         #endregion
     }

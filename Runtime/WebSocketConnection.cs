@@ -151,6 +151,8 @@ namespace MikeSchweitzer.WebSocket
         {
             if (_webSocket == null)
                 return;
+            if (State != WebSocketState.Connected)
+                return;
 
             await _webSocket.ProcessMessagesAsync();
         }
@@ -173,7 +175,7 @@ namespace MikeSchweitzer.WebSocket
             ForceShutdownWebSocket();
             // clear messages after state change so messages are available to event listeners
             ChangeState(WebSocketState.DisconnectedFromAppQuit);
-            ClearMessageBuffers();
+            ClearMessages();
         }
         #endregion
 
@@ -189,7 +191,7 @@ namespace MikeSchweitzer.WebSocket
                     await ShutdownWebSocketAsync();
                     // clear messages after state change so messages are available to event listeners
                     ChangeState(WebSocketState.Disconnected);
-                    ClearMessageBuffers();
+                    ClearMessages();
                 }
                 else if (State == WebSocketState.Connected)
                 {
@@ -206,7 +208,7 @@ namespace MikeSchweitzer.WebSocket
                     DesiredState = WebSocketDesiredState.None;
                     ErrorMessage = null;
                     Config = DeepCopy(DesiredConfig);
-                    ClearMessageBuffers();
+                    ClearMessages();
                     ChangeState(WebSocketState.Connecting);
 
                     await ShutdownWebSocketAsync();
@@ -411,7 +413,7 @@ namespace MikeSchweitzer.WebSocket
             return true;
         }
 
-        private void ClearMessageBuffers()
+        private void ClearMessages()
         {
             _incomingMessages.Clear();
         }

@@ -15,8 +15,8 @@ namespace MikeSchweitzer.WebSocket.Internal
         // message buffering isn't strictly necessary, it's for API consistency with DotNet path
         private readonly Queue<WebSocketMessage> _outgoingMessages = new Queue<WebSocketMessage>();
         private readonly Queue<WebSocketMessage> _incomingMessages = new Queue<WebSocketMessage>();
-        private readonly List<WebSocketMessage> _tempOutgoingMessages = new List<WebSocketMessage>();
-        private readonly List<WebSocketMessage> _tempIncomingMessages = new List<WebSocketMessage>();
+        private readonly List<WebSocketMessage> _workingOutgoingMessages = new List<WebSocketMessage>();
+        private readonly List<WebSocketMessage> _workingIncomingMessages = new List<WebSocketMessage>();
 
         private static bool _globalInitialized;
         private static Dictionary<int, WebGLWebSocket> _globalInstanceMap = new Dictionary<int, WebGLWebSocket>();
@@ -83,6 +83,8 @@ namespace MikeSchweitzer.WebSocket.Internal
         #region IWebSocket Methods
         public Task ConnectAsync()
         {
+            ClearMessages();
+
             var state = JsLibBridge.Connect(_instanceId);
             if (state < 0)
                 Error?.Invoke(JsLibBridge.TranslateCustomErrorState(state));
@@ -139,10 +141,10 @@ namespace MikeSchweitzer.WebSocket.Internal
             if (_outgoingMessages.Count == 0)
                 return;
 
-            _tempOutgoingMessages.AddRange(_outgoingMessages);
+            _workingOutgoingMessages.AddRange(_outgoingMessages);
             _outgoingMessages.Clear();
 
-            foreach (var message in _tempOutgoingMessages)
+            foreach (var message in _workingOutgoingMessages)
             {
                 if (State != WebSocketState.Open)
                     break;
@@ -156,7 +158,7 @@ namespace MikeSchweitzer.WebSocket.Internal
                 else
                     MessageSent?.Invoke(message);
             }
-            _tempOutgoingMessages.Clear();
+            _workingOutgoingMessages.Clear();
         }
 
         private void ProcessIncomingMessages()
@@ -164,12 +166,20 @@ namespace MikeSchweitzer.WebSocket.Internal
             if (_incomingMessages.Count == 0)
                 return;
 
-            _tempIncomingMessages.AddRange(_incomingMessages);
+            _workingIncomingMessages.AddRange(_incomingMessages);
             _incomingMessages.Clear();
 
-            foreach (var message in _tempIncomingMessages)
+            foreach (var message in _workingIncomingMessages)
                 MessageReceived?.Invoke(message);
-            _tempIncomingMessages.Clear();
+            _workingIncomingMessages.Clear();
+        }
+
+        private void ClearMessages()
+        {
+            _outgoingMessages.Clear();
+            _incomingMessages.Clear();
+            _workingOutgoingMessages.Clear();
+            _workingIncomingMessages.Clear();
         }
         #endregion
 
@@ -237,6 +247,7 @@ namespace MikeSchweitzer.WebSocket.Internal
                 return;
 
             instance.Closed?.Invoke(WebSocketHelpers.ConvertCloseCode(closeCode));
+            instance.ClearMessages();
         }
 
         private static void OnError(int instanceId)
