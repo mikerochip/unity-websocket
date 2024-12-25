@@ -15,8 +15,8 @@ namespace MikeSchweitzer.WebSocket.Internal
         // message buffering isn't strictly necessary, it's for API consistency with DotNet path
         private readonly Queue<WebSocketMessage> _outgoingMessages = new Queue<WebSocketMessage>();
         private readonly Queue<WebSocketMessage> _incomingMessages = new Queue<WebSocketMessage>();
-        private readonly List<WebSocketMessage> _workingOutgoingMessages = new List<WebSocketMessage>();
-        private readonly List<WebSocketMessage> _workingIncomingMessages = new List<WebSocketMessage>();
+        private readonly Queue<WebSocketMessage> _workingOutgoingMessages = new Queue<WebSocketMessage>();
+        private readonly Queue<WebSocketMessage> _workingIncomingMessages = new Queue<WebSocketMessage>();
 
         private static bool _globalInitialized;
         private static Dictionary<int, WebGLWebSocket> _globalInstanceMap = new Dictionary<int, WebGLWebSocket>();
@@ -138,16 +138,15 @@ namespace MikeSchweitzer.WebSocket.Internal
         #region Message Processing Methods
         private void ProcessOutgoingMessages()
         {
-            if (_outgoingMessages.Count == 0)
-                return;
+            while (_outgoingMessages.Count > 0)
+                _workingOutgoingMessages.Enqueue(_outgoingMessages.Dequeue());
 
-            _workingOutgoingMessages.AddRange(_outgoingMessages);
-            _outgoingMessages.Clear();
-
-            foreach (var message in _workingOutgoingMessages)
+            while (_workingOutgoingMessages.Count > 0)
             {
+                var message = _workingOutgoingMessages.Dequeue();
+
                 if (State != WebSocketState.Open)
-                    break;
+                    continue;
 
                 var state = message.Type == WebSocketDataType.Binary
                     ? JsLibBridge.SendBinary(_instanceId, message.Bytes)
@@ -158,20 +157,18 @@ namespace MikeSchweitzer.WebSocket.Internal
                 else
                     MessageSent?.Invoke(message);
             }
-            _workingOutgoingMessages.Clear();
         }
 
         private void ProcessIncomingMessages()
         {
-            if (_incomingMessages.Count == 0)
-                return;
+            while (_incomingMessages.Count > 0)
+                _workingIncomingMessages.Enqueue(_incomingMessages.Dequeue());
 
-            _workingIncomingMessages.AddRange(_incomingMessages);
-            _incomingMessages.Clear();
-
-            foreach (var message in _workingIncomingMessages)
+            while (_workingIncomingMessages.Count > 0)
+            {
+                var message = _workingIncomingMessages.Dequeue();
                 MessageReceived?.Invoke(message);
-            _workingIncomingMessages.Clear();
+            }
         }
 
         private void ClearMessages()

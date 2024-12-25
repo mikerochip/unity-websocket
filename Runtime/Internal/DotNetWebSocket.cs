@@ -28,9 +28,9 @@ namespace MikeSchweitzer.WebSocket.Internal
         private readonly Queue<WebSocketMessage> _incomingMessages = new Queue<WebSocketMessage>();
         private readonly Queue<string> _incomingErrorMessages = new Queue<string>();
         // temp lists are used to reduce garbage when copying from the queues above
-        private readonly List<WebSocketMessage> _workingOutgoingMessages = new List<WebSocketMessage>();
-        private readonly List<WebSocketMessage> _workingIncomingMessages = new List<WebSocketMessage>();
-        private readonly List<string> _workingIncomingErrorMessages = new List<string>();
+        private readonly Queue<WebSocketMessage> _workingOutgoingMessages = new Queue<WebSocketMessage>();
+        private readonly Queue<WebSocketMessage> _workingIncomingMessages = new Queue<WebSocketMessage>();
+        private readonly Queue<string> _workingIncomingErrorMessages = new Queue<string>();
         #endregion
 
         #region IWebSocket Events
@@ -209,16 +209,15 @@ namespace MikeSchweitzer.WebSocket.Internal
         #region Message Processing Methods
         private async Task ProcessOutgoingMessagesAsync()
         {
-            if (_outgoingMessages.Count == 0)
-                return;
+            while (_outgoingMessages.Count > 0)
+                _workingOutgoingMessages.Enqueue(_outgoingMessages.Dequeue());
 
-            _workingOutgoingMessages.AddRange(_outgoingMessages);
-            _outgoingMessages.Clear();
-
-            foreach (var message in _workingOutgoingMessages)
+            while (_workingOutgoingMessages.Count > 0)
             {
+                var message = _workingOutgoingMessages.Dequeue();
+
                 if (_socket.State != System.Net.WebSockets.WebSocketState.Open)
-                    break;
+                    continue;
 
                 var segment = new ArraySegment<byte>(message.Bytes);
                 var type = message.Type == WebSocketDataType.Binary
@@ -228,39 +227,30 @@ namespace MikeSchweitzer.WebSocket.Internal
 
                 MessageSent?.Invoke(message);
             }
-            _workingOutgoingMessages.Clear();
         }
 
         private void ProcessIncomingMessages()
         {
             lock (_incomingErrorMessages)
             {
-                if (_incomingErrorMessages.Count > 0)
-                {
-                    _workingIncomingErrorMessages.AddRange(_incomingErrorMessages);
-                    _incomingErrorMessages.Clear();
-                }
+                while (_incomingErrorMessages.Count > 0)
+                    _workingIncomingErrorMessages.Enqueue(_incomingErrorMessages.Dequeue());
             }
-            if (_workingIncomingErrorMessages.Count > 0)
+            while (_workingIncomingErrorMessages.Count > 0)
             {
-                foreach (var message in _workingIncomingErrorMessages)
-                    Error?.Invoke(message);
-                _workingIncomingErrorMessages.Clear();
+                var message = _workingIncomingErrorMessages.Dequeue();
+                Error?.Invoke(message);
             }
 
             lock (_incomingMessages)
             {
-                if (_incomingMessages.Count > 0)
-                {
-                    _workingIncomingMessages.AddRange(_incomingMessages);
-                    _incomingMessages.Clear();
-                }
+                while (_incomingMessages.Count > 0)
+                    _workingIncomingMessages.Enqueue(_incomingMessages.Dequeue());
             }
-            if (_workingIncomingMessages.Count > 0)
+            while (_workingIncomingMessages.Count > 0)
             {
-                foreach (var message in _workingIncomingMessages)
-                    MessageReceived?.Invoke(message);
-                _workingIncomingMessages.Clear();
+                var message = _workingIncomingMessages.Dequeue();
+                MessageReceived?.Invoke(message);
             }
         }
 

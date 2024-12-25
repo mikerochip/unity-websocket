@@ -46,8 +46,9 @@ namespace MikeSchweitzer.WebSocket
         #endregion
 
         #region Private Fields
-        private CancellationTokenSource _cancellationTokenSource;
+        private CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
         private IWebSocket _webSocket;
+        private bool _mainLoopEntered;
         private Task _connectTask;
         private DateTime _lastPingQueuedTimestamp;
         private DateTime _lastPingSentTimestamp;
@@ -143,18 +144,23 @@ namespace MikeSchweitzer.WebSocket
         #region Unity Methods
         private async void Awake()
         {
-            _cancellationTokenSource = new CancellationTokenSource();
-            await Task.WhenAll(MainLoopAsync(), ConnectAsync());
+            await WaitForConnectTaskAsync();
         }
 
         private async void Update()
         {
-            if (_webSocket == null)
-                return;
-            if (State != WebSocketState.Connected)
-                return;
-
-            await _webSocket.ProcessMessagesAsync();
+            if (!_mainLoopEntered)
+            {
+                _mainLoopEntered = true;
+                try
+                {
+                    await MainLoopAsync();
+                }
+                finally
+                {
+                    _mainLoopEntered = false;
+                }
+            }
         }
 
         private void OnDestroy()
@@ -172,70 +178,81 @@ namespace MikeSchweitzer.WebSocket
             if (State != WebSocketState.Connecting && State != WebSocketState.Connected)
                 return;
 
-            ForceShutdownWebSocket();
-            // clear messages after state change so messages are available to event listeners
-            ChangeState(WebSocketState.DisconnectedFromAppQuit);
-            ClearMessages();
+            try
+            {
+                ForceShutdownWebSocket();
+                ChangeState(WebSocketState.DisconnectedFromAppQuit);
+            }
+            finally
+            {
+                // clear messages after state change so messages are available to event listeners
+                ClearMessages();
+            }
         }
         #endregion
 
-        #region Message Loop Methods
+        #region Main Loop Methods
         private async Task MainLoopAsync()
         {
-            while (true)
+            // process Disconnecting before desired state so we can ensure Disconnecting
+            // always leads to Disconnected
+            if (State == WebSocketState.Disconnecting)
             {
-                // process Disconnecting before desired state so we can ensure Disconnecting
-                // always leads to Disconnected
-                if (State == WebSocketState.Disconnecting)
+                await ShutdownWebSocketAsync();
+
+                try
                 {
-                    await ShutdownWebSocketAsync();
-                    // clear messages after state change so messages are available to event listeners
                     ChangeState(WebSocketState.Disconnected);
+                }
+                finally
+                {
+                    // clear messages after state change so messages are available to event listeners
                     ClearMessages();
                 }
-                else if (State == WebSocketState.Connected)
-                {
-                    SendPing();
-                }
+            }
+            else if (State == WebSocketState.Connected)
+            {
+                SendPing();
+                await _webSocket.ProcessMessagesAsync();
+            }
 
-                // cancellations only happen when destroying or shutting down, so we don't need to
-                // process desired states afterward
-                if (_cancellationTokenSource.IsCancellationRequested)
-                    break;
+            // cancellations only happen when destroying or shutting down, so we don't need to
+            // process desired states afterward
+            if (_cancellationTokenSource.IsCancellationRequested)
+                return;
 
-                if (DesiredState == WebSocketDesiredState.Connect)
+            if (DesiredState == WebSocketDesiredState.Connect)
+            {
+                DesiredState = WebSocketDesiredState.None;
+
+                Config = DeepCopy(DesiredConfig);
+                ErrorMessage = null;
+                ClearMessages();
+
+                try
                 {
-                    DesiredState = WebSocketDesiredState.None;
-                    ErrorMessage = null;
-                    Config = DeepCopy(DesiredConfig);
-                    ClearMessages();
                     ChangeState(WebSocketState.Connecting);
-
                     await ShutdownWebSocketAsync();
-
-                    try
-                    {
-                        InitializeWebSocket();
-                    }
-                    catch (Exception e)
-                    {
-                        OnError(e.Message);
-                        ChangeState(WebSocketState.Invalid);
-                    }
+                    InitializeWebSocket();
                 }
-                else if (DesiredState == WebSocketDesiredState.Disconnect)
+                catch (Exception e)
                 {
-                    DesiredState = WebSocketDesiredState.None;
-
-                    if (State == WebSocketState.Connecting || State == WebSocketState.Connected)
-                        ChangeState(WebSocketState.Disconnecting);
+                    OnError(e.Message);
+                    ChangeState(WebSocketState.Invalid);
                 }
+            }
+            else if (DesiredState == WebSocketDesiredState.Disconnect)
+            {
+                DesiredState = WebSocketDesiredState.None;
 
-                await Task.Yield();
+                if (State == WebSocketState.Connecting || State == WebSocketState.Connected)
+                    ChangeState(WebSocketState.Disconnecting);
             }
         }
 
-        private async Task ConnectAsync()
+        // the connect task is infinite since it blocks and runs the receive loop, so
+        // we can't await it in the main loop
+        private async Task WaitForConnectTaskAsync()
         {
             while (!_cancellationTokenSource.IsCancellationRequested)
             {
@@ -248,8 +265,6 @@ namespace MikeSchweitzer.WebSocket
 
         private void SendPing()
         {
-            if (State != WebSocketState.Connected)
-                return;
             if (!IsPinging)
                 return;
 
