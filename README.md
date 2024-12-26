@@ -12,16 +12,17 @@
    * Doesn't force `#if` for WebGL: no conditional-compilation required
    * Public API prevents you from corrupting an active connection
    * Reusable: connect, disconnect, change URL, connect again from one `WebSocketConnection`
+* Wide platform support
+   * No external install requirements or dependencies
+   * `string` is treated as text, `byte[]` as binary (some servers enforce this)
+   * Custom ping-pong support, write once for Web and non-Web
+   * Web uses a `.jslib` JavaScript library, non-Web builds use the built-in `System.Net.WebSockets`
+   * Includes support for `WebAssembly.Table` (Unity 6+)
 * Flexible config
    * URL is the only required config
    * Sane defaults
    * Optionally set subprotocols, max send, and max receive bytes
-* Wide platform support
-   * No external install requirements or dependencies
-   * `string` is treated as text and `byte[]` as binary (some servers care)
-   * Customizable ping-pong support for servers that enforce idle timeouts
-   * Includes support for `WebAssembly.Table` (Unity 2023.2+)
-   * Web uses a `.jslib` JavaScript library, other platforms use the built-in `System.Net.WebSockets`
+   * Optionally configure ping-pongs to happen one after another, enabling RTT tracking
 
 # Install
 
@@ -255,31 +256,70 @@ private async Task ReceiveMessagesAsync()
 }
 ```
 
-## Customizable Ping-Pong Support
+## Custom Ping-Pong Support
 
-This package has a custom ping-pong system that you can use regardless of platform.
+This package has a custom ping-pong that you can use on both Web and non-Web builds.
 
 ⚠️ Your server must be configured to echo messages of the same message type (text or binary) and content.\
-⚠️ This package has custom ping-pong support because the JavaScript WebSocket client does not implement [the WebSocket Ping Pong spec](https://datatracker.ietf.org/doc/html/rfc6455#section-5.5.2) even though .NET's `WebSocketClient` does implement the spec.
+⚠️ This package has custom ping-pong support because the default browser JavaScript WebSocket does not implement [the WebSocket Ping Pong spec](https://datatracker.ietf.org/doc/html/rfc6455#section-5.5.2) even though .NET's `WebSocketClient` does implement the spec.
 
+### Enable Text Ping-Pongs
 ```CSharp
 private void ConfigureStringPings()
 {
     _Connection.DesiredConfig = new WebSocketConfig
     {
+        Url = _Url,
         PingInterval = TimeSpan.FromSeconds(30),
         PingMessage = new WebSocketMessage("ping"),
     };
 }
+```
 
+### Enable Binary Ping-Pongs
+```CSharp
 private byte[] _pingBytes = Encoding.UTF8.GetBytes("ping");
 private void ConfigureBinaryPings()
 {
     _Connection.DesiredConfig = new WebSocketConfig
     {
+        Url = _Url,
         PingInterval = TimeSpan.FromSeconds(30),
         PingMessage = new WebSocketMessage(_pingBytes),
     };
+}
+```
+
+### Enable Round Trip Time (RTT) Tracking
+```CSharp
+private void Awake()
+{
+    _Connection.DesiredConfig = new WebSocketConfig
+    {
+        Url = _Url,
+        PingInterval = TimeSpan.FromSeconds(3),
+        PingMessage = new WebSocketMessage("ping"),
+        ShouldPingWaitForPong = true,
+    };
+    _Connection.PingSent += OnPingSent;
+    _Connection.PongReceived += OnPongReceived;
+}
+
+private void OnDestroy()
+{
+    _Connection.PingSent -= OnPingSent;
+    _Connection.PongReceived -= OnPongReceived;
+}
+
+private void OnPingSent(WebSocketConnection connection, DateTime timestamp)
+{
+    Debug.Log($"OnPingSent timestamp={timestamp:HH:mm:ss.ffff}");
+}
+
+private void OnPongReceived(WebSocketConnection connection, DateTime timestamp)
+{
+    Debug.Log($"OnPongReceived timestamp={timestamp:HH:mm:ss.ffff}");
+    Debug.Log($"OnPongReceived RTT={connection.LastPingPongInterval:ss\\.ffff}");
 }
 ```
 
