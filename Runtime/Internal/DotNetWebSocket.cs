@@ -164,9 +164,11 @@ namespace MikeSchweitzer.WebSocket.Internal
             switch (_socket.State)
             {
                 case System.Net.WebSockets.WebSocketState.Open:
-                    // We have to handle a case where the socket state can be open AND
-                    // the server decides to close the socket before completing the close
-                    // handshake (e.g. server suddenly becomes unavailable). Exception is:
+                    // We have to handle a case where the socket state can be open AND the server
+                    // closes the socket unexpectedly (crash, API bug, etc). CloseOutputAsync() helps
+                    // here because it does not wait for the close handshake.
+                    //
+                    // Reference exception:
                     //
                     // System.Net.WebSockets.WebSocketException (0x80004005): The remote party closed the WebSocket connection without completing the close handshake.
                     // ---> System.IO.IOException: Unable to read data from the transport connection: interrupted.
@@ -182,7 +184,7 @@ namespace MikeSchweitzer.WebSocket.Internal
                     // at MikeSchweitzer.WebSocket.Internal.DotNetWebSocket.CloseAsync () [0x00080] in ...
                     try
                     {
-                        await _socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None);
+                        await _socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None);
                     }
                     catch (Exception e)
                     {
@@ -275,56 +277,48 @@ namespace MikeSchweitzer.WebSocket.Internal
         private async Task ReceiveLoopAsync()
         {
             var buffer = new ArraySegment<byte>(new byte[_maxReceiveBytes]);
+
+            var result = await _socket.ReceiveAsync(buffer, _cancellationToken);
             while (_socket.State == System.Net.WebSockets.WebSocketState.Open)
             {
-                using (var memoryStream = new MemoryStream())
+                var byteCount = result.Count;
+                if (byteCount > _maxReceiveBytes)
                 {
-                    WebSocketReceiveResult result;
-                    string errorMessage = null;
-                    var byteCount = 0;
-                    do
-                    {
+                    var errorMessage = WebSocketHelpers.GetReceiveSizeExceededErrorMessage(byteCount, _maxReceiveBytes);
+                    lock (_incomingErrorMessages)
+                        _incomingErrorMessages.Enqueue(errorMessage);
+
+                    // drain the message since we're discarding it
+                    while (!result.EndOfMessage && !result.CloseStatus.HasValue)
                         result = await _socket.ReceiveAsync(buffer, _cancellationToken);
 
-                        byteCount += result.Count;
-                        if (byteCount > _maxReceiveBytes)
-                        {
-                            while (!result.EndOfMessage)
-                                result = await _socket.ReceiveAsync(buffer, _cancellationToken);
-
-                            errorMessage = WebSocketHelpers.GetReceiveSizeExceededErrorMessage(byteCount, _maxReceiveBytes);
-                            break;
-                        }
-
-                        if (result.CloseStatus != null)
-                            break;
-
-                        memoryStream.Write(buffer.Array, buffer.Offset, result.Count);
-                    }
-                    while (!result.EndOfMessage);
-
-                    if (errorMessage != null)
-                    {
-                        lock (_incomingErrorMessages)
-                            _incomingErrorMessages.Enqueue(errorMessage);
-                    }
-
-                    if (result.CloseStatus != null)
+                    // re-check close status due to message draining
+                    if (result.CloseStatus.HasValue)
+                        break;
+                }
+                else
+                {
+                    if (result.CloseStatus.HasValue)
                         break;
 
-                    if (byteCount > _maxReceiveBytes)
-                        continue;
+                    using (var memoryStream = new MemoryStream())
+                    {
+                        memoryStream.Seek(0, SeekOrigin.Begin);
+                        var bytes = memoryStream.ToArray();
+                        var message = result.MessageType == WebSocketMessageType.Binary
+                            ? new WebSocketMessage(bytes)
+                            : new WebSocketMessage(System.Text.Encoding.UTF8.GetString(bytes));
 
-                    memoryStream.Seek(0, SeekOrigin.Begin);
-                    var bytes = memoryStream.ToArray();
-                    var message = result.MessageType == WebSocketMessageType.Binary
-                        ? new WebSocketMessage(bytes)
-                        : new WebSocketMessage(System.Text.Encoding.UTF8.GetString(bytes));
-
-                    lock (_incomingMessages)
-                        _incomingMessages.Enqueue(message);
+                        lock (_incomingMessages)
+                            _incomingMessages.Enqueue(message);
+                    }
                 }
+
+                result = await _socket.ReceiveAsync(buffer, _cancellationToken);
             }
+
+            if (result.CloseStatus.HasValue)
+                await _socket.CloseAsync(result.CloseStatus.Value, result.CloseStatusDescription, _cancellationToken);
         }
 
         private void ClearMessages()
