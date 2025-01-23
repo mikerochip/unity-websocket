@@ -301,11 +301,7 @@ namespace MikeSchweitzer.WebSocket
             if (_webSocket == null)
                 return;
 
-            if (_cancellationTokenSource.IsCancellationRequested)
-                _webSocket.Cancel();
-            else
-                await _webSocket.CloseAsync();
-
+            await _webSocket.CloseAsync();
             await _connectTask;
 
             OnWebSocketShutdown();
