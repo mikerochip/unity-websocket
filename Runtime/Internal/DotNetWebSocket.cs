@@ -23,6 +23,7 @@ namespace MikeSchweitzer.WebSocket.Internal
         private CancellationTokenSource _cancellationTokenSource;
         private CancellationToken _cancellationToken;
         private ClientWebSocket _socket;
+        private bool _closeRequested;
 
         private readonly Queue<WebSocketMessage> _outgoingMessages = new Queue<WebSocketMessage>();
         private readonly Queue<WebSocketMessage> _incomingMessages = new Queue<WebSocketMessage>();
@@ -136,6 +137,7 @@ namespace MikeSchweitzer.WebSocket.Internal
                 _cancellationToken = _cancellationTokenSource.Token;
                 _socket?.Dispose();
                 _socket = null;
+                _closeRequested = false;
             }
         }
 
@@ -165,8 +167,7 @@ namespace MikeSchweitzer.WebSocket.Internal
             {
                 case System.Net.WebSockets.WebSocketState.Open:
                     // We have to handle a case where the socket state can be open AND the server
-                    // closes the socket unexpectedly (crash, API bug, etc). CloseOutputAsync() helps
-                    // here because it does not wait for the close handshake.
+                    // closes the socket unexpectedly (crash, API bug, etc).
                     //
                     // Reference exception:
                     //
@@ -184,7 +185,8 @@ namespace MikeSchweitzer.WebSocket.Internal
                     // at MikeSchweitzer.WebSocket.Internal.DotNetWebSocket.CloseAsync () [0x00080] in ...
                     try
                     {
-                        await _socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None);
+                        _closeRequested = true;
+                        await _socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None);
                     }
                     catch (Exception e)
                     {
@@ -292,8 +294,10 @@ namespace MikeSchweitzer.WebSocket.Internal
                     while (!result.EndOfMessage && !result.CloseStatus.HasValue)
                         result = await _socket.ReceiveAsync(buffer, _cancellationToken);
 
-                    // re-check close status due to message draining
+                    // re-check stop conditions due to message draining
                     if (result.CloseStatus.HasValue)
+                        break;
+                    if (_cancellationToken.IsCancellationRequested)
                         break;
                 }
                 else
@@ -317,7 +321,7 @@ namespace MikeSchweitzer.WebSocket.Internal
                 result = await _socket.ReceiveAsync(buffer, _cancellationToken);
             }
 
-            if (result.CloseStatus.HasValue)
+            if (!_closeRequested && result.CloseStatus.HasValue)
                 await _socket.CloseAsync(result.CloseStatus.Value, result.CloseStatusDescription, _cancellationToken);
         }
 
@@ -326,8 +330,11 @@ namespace MikeSchweitzer.WebSocket.Internal
             _outgoingMessages.Clear();
             lock (_incomingMessages)
                 _incomingMessages.Clear();
+            lock (_incomingErrorMessages)
+                _incomingErrorMessages.Clear();
             _workingOutgoingMessages.Clear();
             _workingIncomingMessages.Clear();
+            _workingIncomingErrorMessages.Clear();
         }
         #endregion
     }
