@@ -280,48 +280,51 @@ namespace MikeSchweitzer.WebSocket.Internal
         {
             var buffer = new ArraySegment<byte>(new byte[_maxReceiveBytes]);
 
-            var result = await _socket.ReceiveAsync(buffer, _cancellationToken);
+            WebSocketReceiveResult result = null;
             while (_socket.State == System.Net.WebSockets.WebSocketState.Open)
             {
-                var byteCount = result.Count;
-                if (byteCount > _maxReceiveBytes)
+                using (var memoryStream = new MemoryStream())
                 {
-                    var errorMessage = WebSocketHelpers.GetReceiveSizeExceededErrorMessage(byteCount, _maxReceiveBytes);
-                    lock (_incomingErrorMessages)
-                        _incomingErrorMessages.Enqueue(errorMessage);
-
-                    // drain the message since we're discarding it
-                    while (!result.EndOfMessage && !result.CloseStatus.HasValue)
-                        result = await _socket.ReceiveAsync(buffer, _cancellationToken);
-
-                    // re-check stop conditions due to message draining
-                    if (result.CloseStatus.HasValue)
-                        break;
-                    if (_cancellationToken.IsCancellationRequested)
-                        break;
-                }
-                else
-                {
-                    if (result.CloseStatus.HasValue)
-                        break;
-
-                    using (var memoryStream = new MemoryStream())
+                    string errorMessage = null;
+                    var byteCount = 0;
+                    do
                     {
-                        memoryStream.Seek(0, SeekOrigin.Begin);
-                        var bytes = memoryStream.ToArray();
-                        var message = result.MessageType == WebSocketMessageType.Binary
-                            ? new WebSocketMessage(bytes)
-                            : new WebSocketMessage(System.Text.Encoding.UTF8.GetString(bytes));
+                        result = await _socket.ReceiveAsync(buffer, _cancellationToken);
+                        byteCount += result.Count;
 
-                        lock (_incomingMessages)
-                            _incomingMessages.Enqueue(message);
-                    }
+                        if (byteCount > _maxReceiveBytes)
+                        {
+                            // drain message since we're discarding it
+                            while (!result.EndOfMessage && !result.CloseStatus.HasValue)
+                                result = await _socket.ReceiveAsync(buffer, _cancellationToken);
+
+                            errorMessage = WebSocketHelpers.GetReceiveSizeExceededErrorMessage(byteCount, _maxReceiveBytes);
+                            lock (_incomingErrorMessages)
+                                _incomingErrorMessages.Enqueue(errorMessage);
+                            break;
+                        }
+
+                        if (result.CloseStatus.HasValue)
+                            goto close;
+
+                        memoryStream.Write(buffer.Array, buffer.Offset, result.Count);
+                    } while (!result.EndOfMessage);
+
+                    if (!string.IsNullOrEmpty(errorMessage))
+                        continue;
+
+                    memoryStream.Seek(0, SeekOrigin.Begin);
+                    var bytes = memoryStream.ToArray();
+                    var message = result.MessageType == WebSocketMessageType.Binary
+                        ? new WebSocketMessage(bytes)
+                        : new WebSocketMessage(System.Text.Encoding.UTF8.GetString(bytes));
+                    lock (_incomingMessages)
+                        _incomingMessages.Enqueue(message);
                 }
-
-                result = await _socket.ReceiveAsync(buffer, _cancellationToken);
             }
 
-            if (!_closeRequested && result.CloseStatus.HasValue)
+            close:
+            if (!_closeRequested && result?.CloseStatus.HasValue == true)
                 await _socket.CloseAsync(result.CloseStatus.Value, result.CloseStatusDescription, _cancellationToken);
         }
 
