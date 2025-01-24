@@ -2,7 +2,9 @@
 
 [![Unity Version](https://img.shields.io/badge/Unity-2019.4%2B-blueviolet?logo=unity)](https://unity.com/releases/editor/archive)
 
-`WebSocketConnection` is an easy-to-use WebSocket client for Unity that Just Works
+This package provides a MonoBehaviour called `WebSocketConnection`.
+
+`WebSocketConnection` is an easy-to-use WebSocket client.
 
 # Features
 
@@ -12,7 +14,7 @@
    * Doesn't force `#if` for WebGL: no conditional-compilation required
    * Public API prevents you from corrupting an active connection
    * Reusable: connect, disconnect, change URL, connect again from one `WebSocketConnection`
-* Wide platform support
+* Wide support
    * No external install requirements or dependencies
    * `string` is treated as text, `byte[]` as binary (some servers enforce this)
    * Custom ping-pong support, write once for Web and non-Web
@@ -121,11 +123,11 @@ private void OnStateChanged(WebSocketConnection connection, WebSocketState oldSt
 ```CSharp
 public IEnumerator Reconnect()
 {
-   Disconnect();
-   yield return new WaitUntil(_Connection.State == WebSocketState.Disconnected);
+    Disconnect();
+    yield return new WaitUntil(_Connection.State == WebSocketState.Disconnected);
 
-   // you may change the desired url now, if you want
-   Connect();
+    // you may change the url here, if you want
+    Connect();
 }
 ```
 
@@ -133,9 +135,9 @@ public IEnumerator Reconnect()
 ```CSharp
 private void OnStateChanged(WebSocketConnection connection, WebSocketState oldState, WebSocketState newState)
 {
-    switch (newState == WebSocketState.Disconnected)
+    if (newState == WebSocketState.Disconnected)
     {
-        // you may change the desired url now, if you want
+        // you may change the url here, if you want
         _Connection.Connect();
     }
 }
@@ -160,8 +162,8 @@ private void OnDestroy()
 
 private void OnErrorMessageReceived(WebSocketConnection connection, string errorMessage)
 {
-    Debug.LogError(errorMessage);
     // you can also use _Connection.ErrorMessage
+    Debug.LogError(errorMessage);
 }
 ```
 
@@ -258,10 +260,10 @@ private async Task ReceiveMessagesAsync()
 
 ## Custom Ping-Pong Support
 
-This package has a custom ping-pong that you can use on both Web and non-Web builds.
+This package has a custom ping-pong feature that you can write once for Web and non-Web builds.
 
 ⚠️ Your server must be configured to echo messages of the same message type (text or binary) and content.\
-⚠️ This package has custom ping-pong support because the default browser JavaScript WebSocket does not implement [the WebSocket Ping Pong spec](https://datatracker.ietf.org/doc/html/rfc6455#section-5.5.2) even though .NET's `WebSocketClient` does implement the spec.
+⚠️ This package has custom ping-pong support because the default browser JavaScript WebSocket client does not implement [the WebSocket Ping Pong spec](https://datatracker.ietf.org/doc/html/rfc6455#section-5.5.2) even though .NET's `WebSocketClient` does implement the spec.
 
 ### Enable Text Ping-Pongs
 ```CSharp
@@ -271,14 +273,14 @@ private void ConfigureStringPings()
     {
         Url = _Url,
         PingInterval = TimeSpan.FromSeconds(30),
-        PingMessage = new WebSocketMessage("ping"),
+        PingMessage = new WebSocketMessage("hi"),
     };
 }
 ```
 
 ### Enable Binary Ping-Pongs
 ```CSharp
-private byte[] _pingBytes = Encoding.UTF8.GetBytes("ping");
+private byte[] _pingBytes = Encoding.UTF8.GetBytes("hi");
 private void ConfigureBinaryPings()
 {
     _Connection.DesiredConfig = new WebSocketConfig
@@ -298,7 +300,7 @@ private void Awake()
     {
         Url = _Url,
         PingInterval = TimeSpan.FromSeconds(3),
-        PingMessage = new WebSocketMessage("ping"),
+        PingMessage = new WebSocketMessage("hi"),
         ShouldPingWaitForPong = true,
     };
     _Connection.PingSent += OnPingSent;
