@@ -325,6 +325,13 @@ private void OnPongReceived(WebSocketConnection connection, DateTime timestamp)
 }
 ```
 
+# My Test Projects
+
+If you want to see how I test this package, or you just don't want to roll your own:
+
+* [Server test project](https://github.com/mikerochip/server-websocket-tester)
+* [Client test project](https://github.com/mikerochip/unity-websocket-tester)
+
 # Attribution
 
 Based on [this repo](https://github.com/endel/NativeWebSocket) by Endel Dreyer, which was\
