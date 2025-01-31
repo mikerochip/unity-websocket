@@ -147,19 +147,26 @@ namespace MikeSchweitzer.WebSocket
             await WaitForConnectTaskAsync();
         }
 
+        // Update() is used instead of running the main loop in Awake() because it:
+        //
+        // * Prevents main loop exceptions from being swallowed or buried in AggregateExceptions
+        // * Lets Awake() finish instead of running forever, which feels more idiomatic
         private async void Update()
         {
-            if (!_mainLoopEntered)
+            // This is not my favorite, but is being done because Unity by default will call
+            // Update() again next frame if you await something within an async Update(). It
+            // feels more intuitive this way, sadly.
+            if (_mainLoopEntered)
+                return;
+
+            _mainLoopEntered = true;
+            try
             {
-                _mainLoopEntered = true;
-                try
-                {
-                    await MainLoopAsync();
-                }
-                finally
-                {
-                    _mainLoopEntered = false;
-                }
+                await MainLoopAsync();
+            }
+            finally
+            {
+                _mainLoopEntered = false;
             }
         }
 
