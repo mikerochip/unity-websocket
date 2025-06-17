@@ -25,7 +25,7 @@ namespace MikeSchweitzer.WebSocket.Internal
     internal delegate void MessageSentHandler(WebSocketMessage message);
     internal delegate void MessageReceivedHandler(WebSocketMessage message);
     internal delegate void ErrorHandler(string errorMessage);
-    internal delegate void ClosedHandler(WebSocketCloseCode closeCode);
+    internal delegate void ClosedHandler(WebSocketCloseCode code, string reason);
 
     internal enum WebSocketState
     {
@@ -35,32 +35,13 @@ namespace MikeSchweitzer.WebSocket.Internal
         Closed,
     }
 
-    // see https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent/code
-    internal enum WebSocketCloseCode
-    {
-        NotSet = 0,
-        Normal = 1000,
-        Away = 1001,
-        ProtocolError = 1002,
-        UnsupportedData = 1003,
-        Undefined = 1004,
-        NoStatus = 1005,
-        Abnormal = 1006,
-        InvalidData = 1007,
-        PolicyViolation = 1008,
-        TooBig = 1009,
-        MandatoryExtension = 1010,
-        ServerError = 1011,
-        TlsHandshakeFailure = 1015
-    }
-
     internal static class WebSocketHelpers
     {
-        public static WebSocketCloseCode ConvertCloseCode(int closeCode)
+        public static WebSocketCloseCode ConvertCloseCode(int code)
         {
-            if (Enum.IsDefined(typeof(WebSocketCloseCode), closeCode))
-                return (WebSocketCloseCode)closeCode;
-            return WebSocketCloseCode.Undefined;
+            if (Enum.IsDefined(typeof(WebSocketCloseCode), code))
+                return (WebSocketCloseCode)code;
+            return WebSocketCloseCode.NoCodeProvided;
         }
 
         public static string GetReceiveSizeExceededErrorMessage(int bytes, int maxBytes)

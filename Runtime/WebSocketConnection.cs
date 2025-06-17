@@ -20,6 +20,8 @@ namespace MikeSchweitzer.WebSocket
         public string Url => Config?.Url;
         public WebSocketConfig Config { get; private set; }
         public WebSocketState State { get; private set; }
+        public WebSocketCloseCode CloseCode { get; private set; }
+        public string CloseReason { get; private set; }
         public string ErrorMessage { get; private set; }
         public bool IsPinging => Config?.PingMessage != null && Config?.PingInterval != TimeSpan.Zero;
         // This property is set just before a PongReceived event. Enable ShouldPingWaitForPong
@@ -34,12 +36,14 @@ namespace MikeSchweitzer.WebSocket
         #region Public Events
         public delegate void StateChangedHandler(WebSocketConnection connection, WebSocketState oldState, WebSocketState newState);
         public delegate void MessageReceivedHandler(WebSocketConnection connection, WebSocketMessage message);
+        public delegate void ClosedHandler(WebSocketConnection connection, WebSocketCloseCode closeCode, string reason);
         public delegate void ErrorMessageReceivedHandler(WebSocketConnection connection, string errorMessage);
         public delegate void PingSentHandler(WebSocketConnection connection, DateTime timestamp);
         public delegate void PongReceivedHandler(WebSocketConnection connection, DateTime timestamp);
 
         public event StateChangedHandler StateChanged;
         public event MessageReceivedHandler MessageReceived;
+        public event ClosedHandler Closed;
         public event ErrorMessageReceivedHandler ErrorMessageReceived;
         public event PingSentHandler PingSent;
         public event PongReceivedHandler PongReceived;
@@ -232,9 +236,7 @@ namespace MikeSchweitzer.WebSocket
             {
                 DesiredState = WebSocketDesiredState.None;
 
-                Config = DeepCopy(DesiredConfig);
-                ErrorMessage = null;
-                ClearMessages();
+                InitializeState();
 
                 try
                 {
@@ -385,8 +387,12 @@ namespace MikeSchweitzer.WebSocket
             _incomingMessages.RemoveAt(_incomingMessages.Count - 1);
         }
 
-        private void OnClosed(WebSocketCloseCode closeCode)
+        private void OnClosed(WebSocketCloseCode code, string reason)
         {
+            CloseCode = code;
+            CloseReason = reason;
+            Closed?.Invoke(this, code, reason);
+
             ChangeState(WebSocketState.Disconnecting);
         }
 
@@ -398,6 +404,20 @@ namespace MikeSchweitzer.WebSocket
         #endregion
 
         #region Internal State Management
+        private void InitializeState()
+        {
+            Config = DeepCopy(DesiredConfig);
+            CloseCode = 0;
+            CloseReason = null;
+            ErrorMessage = null;
+            ClearMessages();
+        }
+
+        private void ClearMessages()
+        {
+            _incomingMessages.Clear();
+        }
+
         private static WebSocketConfig DeepCopy(WebSocketConfig src)
         {
             if (src == null)
@@ -429,11 +449,6 @@ namespace MikeSchweitzer.WebSocket
                 return false;
 
             return true;
-        }
-
-        private void ClearMessages()
-        {
-            _incomingMessages.Clear();
         }
 
         private void ChangeState(WebSocketState newState)
