@@ -127,10 +127,14 @@ namespace MikeSchweitzer.WebSocket.Internal
             }
             finally
             {
-                var closeCode = _socket.CloseStatus == null
-                    ? WebSocketCloseCode.Abnormal
-                    : WebSocketHelpers.ConvertCloseCode((int)_socket.CloseStatus);
-                Closed?.Invoke(closeCode);
+                var code = WebSocketCloseCode.Abnormal;
+                string reason = null;
+                if (_socket.CloseStatus != null)
+                {
+                    code = WebSocketHelpers.ConvertCloseCode((int)_socket.CloseStatus);
+                    reason = _socket.CloseStatusDescription;
+                }
+                Closed?.Invoke(code, reason);
 
                 ClearMessages();
                 _cancellationTokenSource = new CancellationTokenSource();

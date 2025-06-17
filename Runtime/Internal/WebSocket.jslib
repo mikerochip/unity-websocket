@@ -84,7 +84,7 @@ var LibraryWebSocket =
         instance.ws.onopen = function(event)
         {
             if (instance.debugLogging)
-                console.log("[JSLIB WebSocket] Instance " + instanceId + ": connected");
+                console.log("[JSLIB WebSocket] " + instanceId + " connected");
 
             if (webSocketState.openCallback)
             {
@@ -98,7 +98,7 @@ var LibraryWebSocket =
         instance.ws.onmessage = function(event)
         {
             if (instance.debugLogging)
-                console.log("[JSLIB WebSocket] Instance " + instanceId + ": received " + event.data);
+                console.log("[JSLIB WebSocket] " + instanceId + " message received: data=" + event.data);
 
             if (event.data instanceof ArrayBuffer)
             {
@@ -148,29 +148,40 @@ var LibraryWebSocket =
         instance.ws.onerror = function(event)
         {
             if (instance.debugLogging)
-                console.log("[JSLIB WebSocket] Instance " + instanceId + ": error occured");
+                console.log("[JSLIB WebSocket] " + instanceId + " error");
 
             if (webSocketState.errorCallback === null)
                 return;
 
-			if (webSocketState.haveDynCall)
-				Module.dynCall_vi(webSocketState.errorCallback, instanceId);
-			else
-				{{{ makeDynCall('vi', 'webSocketState.errorCallback') }}}(instanceId);
-            
+            if (webSocketState.haveDynCall)
+                Module.dynCall_vi(webSocketState.errorCallback, instanceId);
+            else
+                {{{ makeDynCall('vi', 'webSocketState.errorCallback') }}}(instanceId);
+
         };
 
         instance.ws.onclose = function(event)
         {
             if (instance.debugLogging)
-                console.log("[JSLIB WebSocket] Instance " + instanceId + ": closed with code " + event.code);
+                console.log("[JSLIB WebSocket] " + instanceId + " closed: code=" + event.code + " reason=\"" + event.reason + "\"");
 
             if (webSocketState.closeCallback)
             {
-                if (webSocketState.haveDynCall)
-                    Module.dynCall_vii(webSocketState.closeCallback, instanceId, event.code);
-                else
-                    {{{ makeDynCall('vii', 'webSocketState.closeCallback') }}}(instanceId, event.code);
+                var length = lengthBytesUTF8(event.reason) + 1;
+                var buffer = _malloc(length);
+                stringToUTF8(event.reason, buffer, length);
+
+                try
+                {
+                    if (webSocketState.haveDynCall)
+                        Module.dynCall_viii(webSocketState.closeCallback, instanceId, event.code, buffer);
+                    else
+                        {{{ makeDynCall('viii', 'webSocketState.closeCallback') }}}(instanceId, event.code, buffer);
+                }
+                finally
+                {
+                    _free(buffer);
+                }
             }
 
             delete instance.ws;

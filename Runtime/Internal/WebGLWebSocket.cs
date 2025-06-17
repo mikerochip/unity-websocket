@@ -238,12 +238,13 @@ namespace MikeSchweitzer.WebSocket.Internal
             instance._incomingMessages.Enqueue(message);
         }
 
-        private static void OnClosed(int instanceId, int closeCode)
+        private static void OnClosed(int instanceId, int code, string reason)
         {
             if (!_globalInstanceMap.TryGetValue(instanceId, out var instance))
                 return;
 
-            instance.Closed?.Invoke(WebSocketHelpers.ConvertCloseCode(closeCode));
+            var closeCode = WebSocketHelpers.ConvertCloseCode(code);
+            instance.Closed?.Invoke(closeCode, reason);
             instance.ClearMessages();
         }
 
@@ -354,7 +355,7 @@ namespace MikeSchweitzer.WebSocket.Internal
         public delegate void OpenedHandler(int instanceId);
         public delegate void BinaryMessageReceivedHandler(int instanceId, byte[] bytes);
         public delegate void TextMessageReceivedHandler(int instanceId, string text);
-        public delegate void ClosedHandler(int instanceId, int closeCode);
+        public delegate void ClosedHandler(int instanceId, int code, string reason);
         public delegate void ErrorHandler(int instanceId);
 
         public static event OpenedHandler Opened;
@@ -392,7 +393,7 @@ namespace MikeSchweitzer.WebSocket.Internal
         private delegate void JsOpenCallback(int instanceId);
         private delegate void JsBinaryMessageCallback(int instanceId, IntPtr messagePtr, int messageLength);
         private delegate void JsTextMessageCallback(int instanceId, IntPtr messagePtr);
-        private delegate void JsCloseCallback(int instanceId, int closeCode);
+        private delegate void JsCloseCallback(int instanceId, int code, IntPtr reasonPtr);
         private delegate void JsErrorCallback(int instanceId);
 
         [DllImport ("__Internal")]
@@ -428,9 +429,10 @@ namespace MikeSchweitzer.WebSocket.Internal
         }
 
         [MonoPInvokeCallback(typeof(JsCloseCallback))]
-        private static void JsOnClose(int instanceId, int closeCode)
+        private static void JsOnClose(int instanceId, int code, IntPtr reasonPtr)
         {
-            Closed?.Invoke(instanceId, closeCode);
+            var reason = Marshal.PtrToStringAuto(reasonPtr);
+            Closed?.Invoke(instanceId, code, reason);
         }
 
         [MonoPInvokeCallback(typeof(JsErrorCallback))]
