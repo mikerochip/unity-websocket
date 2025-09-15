@@ -295,7 +295,9 @@ namespace MikeSchweitzer.WebSocket
                 Config.Headers,
                 Config.MaxReceiveBytes,
                 Config.CanDebugLog,
-                IsPinging);
+                IsPinging,
+                Config.SelfSignedCert,
+                Config.SelfSignedCertPassword);
             _webSocket.Opened += OnOpened;
             _webSocket.MessageSent += OnMessageSent;
             _webSocket.MessageReceived += OnMessageReceived;
@@ -303,6 +305,9 @@ namespace MikeSchweitzer.WebSocket
             _webSocket.Error += OnError;
 
             _connectTask = _webSocket.ConnectAsync();
+
+            // for security purposes, dump the password immediately after usage
+            Config.SelfSignedCertPassword = null;
         }
 
         private async Task ShutdownWebSocketAsync()
@@ -433,6 +438,8 @@ namespace MikeSchweitzer.WebSocket
                 PingInterval = src.PingInterval,
                 PingMessage = src.PingMessage?.Clone(),
                 CanDebugLog = src.CanDebugLog,
+                SelfSignedCert = src.SelfSignedCert,
+                SelfSignedCertPassword = src.SelfSignedCertPassword,
             };
         }
 

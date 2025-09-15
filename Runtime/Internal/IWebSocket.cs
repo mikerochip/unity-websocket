@@ -55,7 +55,9 @@ namespace MikeSchweitzer.WebSocket.Internal
             Dictionary<string, string> headers,
             int maxReceiveBytes,
             bool debugLogging,
-            bool suppressDotNetKeepAlive)
+            bool dotNetSuppressKeepAlive,
+            byte[] dotNetSelfSignedCert,
+            char[] dotNetSelfSignedCertPassword)
         {
             var uri = new Uri(url);
             var protocol = uri.Scheme;
@@ -63,9 +65,18 @@ namespace MikeSchweitzer.WebSocket.Internal
                 throw new ArgumentException($"Unsupported protocol: {protocol}");
 
             #if !UNITY_WEBGL || UNITY_EDITOR
-                return new DotNetWebSocket(uri, subprotocols, headers, maxReceiveBytes, suppressDotNetKeepAlive);
+                return new DotNetWebSocket(uri,
+                    subprotocols,
+                    headers,
+                    maxReceiveBytes,
+                    dotNetSuppressKeepAlive,
+                    dotNetSelfSignedCert,
+                    dotNetSelfSignedCertPassword);
             #else
-                return new WebGLWebSocket(uri, subprotocols, maxReceiveBytes, debugLogging);
+                return new WebGLWebSocket(uri,
+                    subprotocols,
+                    maxReceiveBytes,
+                    debugLogging);
             #endif
         }
     }

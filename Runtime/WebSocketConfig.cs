@@ -16,5 +16,10 @@ namespace MikeSchweitzer.WebSocket
         // LastPingPongInterval more accurate for round-trip-time measurements.
         public bool ShouldPingWaitForPong { get; set; }
         public bool CanDebugLog { get; set; }
+        public byte[] SelfSignedCert { get; set; }
+        // Passing password like this prevents string interning
+        // If you MUST start with a string, do this:
+        // MyConfig.SelfSignedCertPassword = s.ToCharArray()
+        public char[] SelfSignedCertPassword { get; set; }
     }
 }
