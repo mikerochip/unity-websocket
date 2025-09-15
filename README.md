@@ -34,12 +34,10 @@ See official instructions for how to [Install a Package from a Git URL](https://
 
 # ⚠️ Known Limitations ⚠️
 
-* Headers aren't supported in WebGL because the JavaScript [WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) doesn't support them
-   * See [this StackOverflow issue](https://stackoverflow.com/questions/4361173/http-headers-in-websockets-client-api) for more.
-* You can't bypass server certificate validation when connecting to a secure websocket endpoint (`wss`). That means the endpoint must have a CA-verifiable SSL certificate, it can't have no certs installed or only self-signed certs.
-   * For WebGL, this is due to a limitation in the JavaScript WebSocket API
-   * For .NET, this is due to a bug in Unity's mono runtime
-   * There is an [active issue](https://github.com/mikerochip/unity-websocket/issues/7) to address this, but no timeframe for resolution, currently.
+* For Web, there are some limitations due to the underlying implementation using the default browser JavaScript [WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket)
+   * No custom header support. See [this](https://stackoverflow.com/questions/4361173/http-headers-in-websockets-client-api) for more.
+   * No support for servers with self-signed certs
+* For .NET, support for servers with self-signed certs is an [active issue](https://github.com/mikerochip/unity-websocket/issues/7)
 
 # Samples
 
