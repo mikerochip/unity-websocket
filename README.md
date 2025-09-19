@@ -345,9 +345,9 @@ private void OnPongReceived(WebSocketConnection connection, DateTime timestamp)
 
 ## Self-Signed Certificates
 
-If you must use self-signed certificates, then here is a way to make that work.
+If you must use self-signed certificates, then there is a way to make that work with this package by following roughly these steps.
 
-> ![WARNING]
+> [!WARNING]
 > **I highly recommend against self-signed certs.** These steps are easy to mess up and overly complicated.
 >
 > I highly recommend instead:
@@ -356,12 +356,12 @@ If you must use self-signed certificates, then here is a way to make that work.
 > * Just using insecure `ws:`
 
 1. Create a certificate with e.g. `openssl`
-   * Example:\
-     `openssl req -x509 -newkey rsa:2048 -nodes -out cert.pem -keyout key.pem -days 365 -subj "/CN=example.local" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,DNS:my-example-domain.com"`
+   * Example:
+     ```openssl req -x509 -newkey rsa:2048 -nodes -out cert.pem -keyout key.pem -days 365 -subj "/CN=example.local" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,DNS:my-example-domain.com"```
    * In the above example, replace `my-example-domain.com` with your domain name (if you have one, otherwise leave out the `DNS:` SAN)
 2. Export a pfx file from your cert
-   * Example:\
-     `openssl pkcs12 -export -in cert.pem -inkey key.pem -out cert.pfx -password pass:mypass -macalg SHA1 -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES`
+   * Example:
+     ```openssl pkcs12 -export -in cert.pem -inkey key.pem -out cert.pfx -password pass:mypass -macalg SHA1 -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES```
    * In the above example, replace `mypass` with a password of your choosing
    * ⚠️**NOTE**: You MUST use these algorithm options or Unity will fail to load your cert
 3. Set your Unity project's `Api Compatibility Level` to `.NET Framework`
@@ -378,7 +378,7 @@ If you must use self-signed certificates, then here is a way to make that work.
        }
    }
    ```
-5. In some `Awake()` method somewhere, add this line:\
+5. In some `Awake()` method somewhere, add this line:
    ```CSharp
    ServicePointManager.CertificatePolicy = new SelfSignedCertTrustPolicy();
    ```
