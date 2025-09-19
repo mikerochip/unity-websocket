@@ -292,10 +292,12 @@ namespace MikeSchweitzer.WebSocket
             _webSocket = WebSocketHelpers.CreateWebSocket(
                 Config.Url,
                 Config.Subprotocols,
-                Config.Headers,
+                Config.DotNetHeaders,
                 Config.MaxReceiveBytes,
                 Config.CanDebugLog,
-                IsPinging);
+                IsPinging,
+                Config.DotNetSelfSignedCert,
+                Config.DotNetSelfSignedCertPassword);
             _webSocket.Opened += OnOpened;
             _webSocket.MessageSent += OnMessageSent;
             _webSocket.MessageReceived += OnMessageReceived;
@@ -427,12 +429,14 @@ namespace MikeSchweitzer.WebSocket
             {
                 Url = src.Url,
                 Subprotocols = src.Subprotocols?.ToList(),
-                Headers = src.Headers?.ToDictionary(pair => pair.Key, pair => pair.Value),
+                DotNetHeaders = src.DotNetHeaders?.ToDictionary(pair => pair.Key, pair => pair.Value),
                 MaxReceiveBytes = src.MaxReceiveBytes,
                 MaxSendBytes = src.MaxSendBytes,
                 PingInterval = src.PingInterval,
                 PingMessage = src.PingMessage?.Clone(),
                 CanDebugLog = src.CanDebugLog,
+                DotNetSelfSignedCert = src.DotNetSelfSignedCert,
+                DotNetSelfSignedCertPassword = src.DotNetSelfSignedCertPassword,
             };
         }
 

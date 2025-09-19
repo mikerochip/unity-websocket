@@ -3,8 +3,12 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Security;
 using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
+using System.Security;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -19,6 +23,8 @@ namespace MikeSchweitzer.WebSocket.Internal
         private readonly Dictionary<string, string> _headers;
         private readonly int _maxReceiveBytes;
         private readonly bool _suppressKeepAlive;
+        private readonly byte[] _selfSignedCert;
+        private readonly char[] _selfSignedCertPassword;
 
         private CancellationTokenSource _cancellationTokenSource;
         private CancellationToken _cancellationToken;
@@ -75,13 +81,17 @@ namespace MikeSchweitzer.WebSocket.Internal
             IEnumerable<string> subprotocols,
             Dictionary<string, string> headers,
             int maxReceiveBytes,
-            bool suppressKeepAlive)
+            bool suppressKeepAlive,
+            byte[] selfSignedCert,
+            char[] selfSignedCertPassword)
         {
             _uri = uri;
             _subprotocols = subprotocols?.ToList();
             _headers = headers?.ToDictionary(pair => pair.Key, pair => pair.Value);
             _maxReceiveBytes = maxReceiveBytes;
             _suppressKeepAlive = suppressKeepAlive;
+            _selfSignedCert = selfSignedCert?.ToArray();
+            _selfSignedCertPassword = selfSignedCertPassword;
 
             _cancellationTokenSource = new CancellationTokenSource();
             _cancellationToken = _cancellationTokenSource.Token;
@@ -113,6 +123,30 @@ namespace MikeSchweitzer.WebSocket.Internal
                 {
                     foreach (var header in _headers)
                         _socket.Options.SetRequestHeader(header.Key, header.Value);
+                }
+
+                if (_selfSignedCert != null && _selfSignedCertPassword != null)
+                {
+                    var prevSecurityProtocol = ServicePointManager.SecurityProtocol;
+                    ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+                    var prevServerCertificateValidationCallback = ServicePointManager.ServerCertificateValidationCallback;
+                    ServicePointManager.ServerCertificateValidationCallback = SelfSignedCertTrust;
+                    //var prevCertPolicy = ServicePointManager.CertificatePolicy;
+                    //ServicePointManager.CertificatePolicy = new SelfSignedCertTrustPolicy();
+
+                    using (var password = new SecureString())
+                    {
+                        foreach (var c in _selfSignedCertPassword)
+                            password.AppendChar(c);
+
+                        var cert = new X509Certificate2(_selfSignedCert, password);
+                        _socket.Options.ClientCertificates.Add(cert);
+                        _socket.Options.RemoteCertificateValidationCallback = SelfSignedCertTrust;
+                    }
+
+                    //ServicePointManager.CertificatePolicy = prevCertPolicy;
+                    ServicePointManager.ServerCertificateValidationCallback = prevServerCertificateValidationCallback;
+                    ServicePointManager.SecurityProtocol = prevSecurityProtocol;
                 }
 
                 await _socket.ConnectAsync(_uri, _cancellationToken);
@@ -344,6 +378,17 @@ namespace MikeSchweitzer.WebSocket.Internal
             _workingIncomingErrorMessages.Clear();
         }
         #endregion
+
+        #region Cert Methods
+        private static bool SelfSignedCertTrust(
+            object sender,
+            X509Certificate certificate,
+            X509Chain chain,
+            SslPolicyErrors sslPolicyErrors)
+        {
+            return true;
+        }
+        #endregion
     }
 
     #region Thread Management
@@ -418,5 +463,20 @@ namespace MikeSchweitzer.WebSocket.Internal
             MainThreadSyncContext.Post(_ => Instance.StartCoroutine(coroutine), null);
         }
     }
+    #endregion
+
+    #region Certs
+    // this enables self-signed certs to work
+    // internal class SelfSignedCertTrustPolicy : ICertificatePolicy
+    // {
+    //     public bool CheckValidationResult(
+    //         ServicePoint servicePoint,
+    //         X509Certificate certificate,
+    //         WebRequest request,
+    //         int certificateProblem)
+    //     {
+    //         return true;
+    //     }
+    // }
     #endregion
 }
