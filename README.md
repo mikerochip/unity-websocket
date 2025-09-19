@@ -143,7 +143,8 @@ private void OnStateChanged(WebSocketConnection connection, WebSocketState oldSt
 
 ## Error Messages
 
-**NOTE: These are just error messages, not states. See the State Querying section.**
+> [!NOTE]
+> These are just error messages, not states. See the State Querying section.
 
 Error messages are generally derived from platform-specific WebSocket errors.
 
@@ -167,7 +168,8 @@ private void OnErrorMessageReceived(WebSocketConnection connection, string error
 
 ## Send Messages
 
-⚠️ You must be `Connected` to send messages, otherwise you will get an error
+> [!WARNING]
+> You must be `Connected` to send messages, otherwise you will get an error
 
 ```CSharp
 public void SendString()
@@ -260,8 +262,9 @@ private async Task ReceiveMessagesAsync()
 
 This package has a custom ping-pong feature that you can write once for Web and non-Web builds.
 
-⚠️ Your server must be configured to echo messages of the same message type (text or binary) and content.\
-⚠️ This package has custom ping-pong support because the default browser JavaScript WebSocket client does not implement [the WebSocket Ping Pong spec](https://datatracker.ietf.org/doc/html/rfc6455#section-5.5.2) even though .NET's `WebSocketClient` does implement the spec.
+> [!WARNING]
+> * Your server must be configured to echo messages of the same message type (text or binary) and content.
+> * This package has custom ping-pong support because the default browser JavaScript WebSocket client does not implement [the WebSocket Ping Pong spec](https://datatracker.ietf.org/doc/html/rfc6455#section-5.5.2) even though .NET's `WebSocketClient` does implement the spec.
 
 ### Enable Text Ping-Pongs
 ```CSharp
