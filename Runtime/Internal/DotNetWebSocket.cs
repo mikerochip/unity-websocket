@@ -127,7 +127,12 @@ namespace MikeSchweitzer.WebSocket.Internal
 
                 if (_selfSignedCert != null && _selfSignedCertPassword != null)
                 {
+                    var prevSecurityProtocol = ServicePointManager.SecurityProtocol;
+                    ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+                    var prevServerCertificateValidationCallback = ServicePointManager.ServerCertificateValidationCallback;
                     ServicePointManager.ServerCertificateValidationCallback = SelfSignedCertTrust;
+                    //var prevCertPolicy = ServicePointManager.CertificatePolicy;
+                    //ServicePointManager.CertificatePolicy = new SelfSignedCertTrustPolicy();
 
                     using (var password = new SecureString())
                     {
@@ -138,6 +143,10 @@ namespace MikeSchweitzer.WebSocket.Internal
                         _socket.Options.ClientCertificates.Add(cert);
                         _socket.Options.RemoteCertificateValidationCallback = SelfSignedCertTrust;
                     }
+
+                    //ServicePointManager.CertificatePolicy = prevCertPolicy;
+                    ServicePointManager.ServerCertificateValidationCallback = prevServerCertificateValidationCallback;
+                    ServicePointManager.SecurityProtocol = prevSecurityProtocol;
                 }
 
                 await _socket.ConnectAsync(_uri, _cancellationToken);
@@ -168,11 +177,6 @@ namespace MikeSchweitzer.WebSocket.Internal
                 _socket = null;
                 _closeRequested = false;
             }
-        }
-
-        private bool ServerCertificateValidationCallback(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
-        {
-            throw new NotImplementedException();
         }
 
         public void AddOutgoingMessage(WebSocketMessage message)
@@ -376,7 +380,11 @@ namespace MikeSchweitzer.WebSocket.Internal
         #endregion
 
         #region Cert Methods
-        internal static bool SelfSignedCertTrust(object servicePoint, X509Certificate certificate, X509Chain chain, SslPolicyErrors errors)
+        private static bool SelfSignedCertTrust(
+            object sender,
+            X509Certificate certificate,
+            X509Chain chain,
+            SslPolicyErrors sslPolicyErrors)
         {
             return true;
         }
@@ -455,5 +463,20 @@ namespace MikeSchweitzer.WebSocket.Internal
             MainThreadSyncContext.Post(_ => Instance.StartCoroutine(coroutine), null);
         }
     }
+    #endregion
+
+    #region Certs
+    // this enables self-signed certs to work
+    // internal class SelfSignedCertTrustPolicy : ICertificatePolicy
+    // {
+    //     public bool CheckValidationResult(
+    //         ServicePoint servicePoint,
+    //         X509Certificate certificate,
+    //         WebRequest request,
+    //         int certificateProblem)
+    //     {
+    //         return true;
+    //     }
+    // }
     #endregion
 }
