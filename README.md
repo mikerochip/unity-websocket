@@ -1,30 +1,32 @@
-# WebSocket Client for Unity
+# WebSocketConnection
 
 [![Unity Version](https://img.shields.io/badge/Unity-2019.4%2B-blueviolet?logo=unity)](https://unity.com/releases/editor/archive)
 
-This package provides a MonoBehaviour called `WebSocketConnection`.
+This package provides a MonoBehaviour called `WebSocketConnection`, an easy-to-use WebSocket client.
 
-`WebSocketConnection` is an easy-to-use WebSocket client.
+# Why Use This?
+
+There is no WebSocket equivalent of `UnityWebRequest`. Without this package, you would have to write a ton of code to use the .NET `WebSocketClient` (for non-web platforms, including editor) and a custom `jslib` for web.
+
+This package does that heavy lifting for you.
 
 # Features
 
 * Easy to use
    * `WebSocketConnection` is just a `MonoBehaviour`
-   * Using `async/await` is optional: event listeners, coroutines, and polling are supported
-   * Doesn't force `#if` for WebGL: no conditional-compilation required
-   * Public API prevents you from corrupting an active connection
+   * Listen for messages with events, coroutines, polling, or `async/await`. Your choice.
+   * Does not force you to use conditional-compilation
    * Reusable: connect, disconnect, change URL, connect again from one `WebSocketConnection`
 * Wide support
    * No external install requirements or dependencies
    * `string` is treated as text, `byte[]` as binary (some servers enforce this)
-   * Custom ping-pong support, write once for Web and non-Web
-   * Web uses a `.jslib` JavaScript library, non-Web builds use the built-in `System.Net.WebSockets`
+   * Custom ping-pong support so you can write once on Web and non-Web (assuming you control the server)
    * Includes support for `WebAssembly.Table` (Unity 6+)
 * Flexible config
    * URL is the only required config
    * Sane defaults
    * Optionally set subprotocols, max send, and max receive bytes
-   * Optionally configure ping-pongs to happen one after another, enabling RTT tracking
+   * Optionally configure ping-pongs to happen in serial, enabling round-trip-time tracking
 
 # Install
 
