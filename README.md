@@ -38,9 +38,10 @@ See official instructions for how to [Install a Package from a Git URL](https://
 
 ## .NET
 
-* Self-signed certs require you to
-   * Use Api Compatibility Level `.NET Framework`
-   * Do a whole ton of fiddly setup, see [sample below](#self-signed-certificates)
+Self-signed certs require you to...
+
+* Use Api Compatibility Level `.NET Framework`
+* Do a whole ton of fiddly setup, see [sample below](#self-signed-certificates)
 
 ## Web
 
@@ -48,8 +49,7 @@ There are limitations due to the underlying implementation using the default bro
 
 * No custom header support. See [this](https://stackoverflow.com/questions/4361173/http-headers-in-websockets-client-api) for more.
 * No support for servers with self-signed certs
-* No websocket spec-compliant ping-pong control frames
-   * The custom ping-pong feature here is a non-spec-compliant alternative
+* No websocket spec-compliant ping-pong control frames. The custom ping-pong feature here is a non-spec-compliant alternative.
 
 # My Test Projects
 
