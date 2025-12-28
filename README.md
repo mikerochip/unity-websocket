@@ -2,58 +2,55 @@
 
 [![Unity Version](https://img.shields.io/badge/Unity-2019.4%2B-blueviolet?logo=unity)](https://unity.com/releases/editor/archive)
 
-This package provides a MonoBehaviour called `WebSocketConnection`, an easy-to-use WebSocket client.
+`WebSocketConnection` is an ergonomic, idiomatic websocket client for Unity. Write-once for all platforms, including Web.
+
+* **Ergonomics**
+  * Does not force you to use `async`
+  * Does not force you to use `#if` conditional compilation
+  * Listen for messages however you want: events, coroutines, polling, or `async/await`
+* **Reliability**
+  * Reusable: connect, disconnect, change URL, connect, ...
+  * `string` is sent as text type, `byte[]` as binary type
+  * Proper handling of disconnects and bad messages
+  * Tested with 100+ `WebSocketConnection` components with minimal drop in framerate
+* **Extended Features**
+  * Custom ping-pongs which can be configured to calculate ping times. ℹ️ You must control the server for this.
+  * Self-signed certificate support. ⚠️ Non-Web only, must use `.NET Framework` Api level.
 
 # Why Use This?
 
-There is no WebSocket equivalent of `UnityWebRequest`. Without this package, you would have to write a ton of code to use the .NET `WebSocketClient` (for non-web platforms, including editor) and a custom `jslib` for web.
+`WebSocketConnection` is easier to use and has better write-once support across platforms.
 
-This package does that heavy lifting for you.
+| Supports               | `WebSocketConnection` | `NativeWebSocket` | `System.Net.WebSockets.ClientWebSocket` |
+| ---------------------- | --------------------- | ----------------- | --------------------------------------- |
+| WebGL                  | ✅                     | ✅                 | ⛔️                                       |
+| `WebAssembly.Table`    | ✅                     | ⛔️                 | ⛔️                                       |
+| Requires using `async` | ✅ Optional            | ⚠️ Required        | ⚠️ Required                              |
+| Code changes for WebGL | ✅ None                | ⚠️ Requires `#if`  | ⛔️ Need custom `jslib`                   |
+| Self-signed certs      | ✅ non-Web             | ⛔️                 | ✅ non-Web                               |
+| Write-once ping-pong   | ✅                     | ⛔️                 | ⛔️                                       |
 
-# Features
-
-* Easy to use
-   * `WebSocketConnection` is just a `MonoBehaviour`
-   * Listen for messages with events, coroutines, polling, or `async/await`. Your choice.
-   * Does not force you to use conditional-compilation
-   * Reusable: connect, disconnect, change URL, connect again from one `WebSocketConnection`
-* Wide support
-   * No external install requirements or dependencies
-   * `string` is treated as text, `byte[]` as binary (some servers enforce this)
-   * Custom ping-pong support so you can write once on Web and non-Web (assuming you control the server)
-   * Includes support for `WebAssembly.Table` (Unity 6+)
-* Flexible config
-   * URL is the only required config
-   * Sane defaults
-   * Optionally set subprotocols, max send, and max receive bytes
-   * Optionally configure ping-pongs to happen in serial, enabling round-trip-time tracking
-
-# Install
+# Installation
 
 See official instructions for how to [Install a Package from a Git URL](https://docs.unity3d.com/Manual/upm-ui-giturl.html). The URL is
 
 `https://github.com/mikerochip/unity-websocket.git`
 
-# ⚠️ Known Limitations ⚠️
+# Known Limitations
 
-## .NET
+* **Self-Signed Certs**
+  * Only works in editor and non-web builds
+  * Required Api Compatibility Level `.NET Framework`
+  * Requires lots of fiddly setup, see [sample below](#self-signed-certificates)
+* **Web Limitations**
+  * The underlying Web implementation uses the default browser JavaScript [WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) to minimize depedencies, which has limitations
+  * No custom header support. See [this](https://stackoverflow.com/questions/4361173/http-headers-in-websockets-client-api)
+  * No self-signed certs support
+  * No spec-compliant ping-pong support. ℹ️ Use the custom ping-pong feature instead, which also adds ping timing support.
 
-Self-signed certs require you to...
+# Test Projects
 
-* Use Api Compatibility Level `.NET Framework`
-* Do a whole ton of fiddly setup, see [sample below](#self-signed-certificates)
-
-## Web
-
-There are limitations due to the underlying implementation using the default browser JavaScript [WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket)
-
-* No custom header support. See [this](https://stackoverflow.com/questions/4361173/http-headers-in-websockets-client-api) for more.
-* No support for servers with self-signed certs
-* No websocket spec-compliant ping-pong control frames. The custom ping-pong feature here is a non-spec-compliant alternative.
-
-# My Test Projects
-
-If you want to see how I test this package, or you just don't want to roll your own:
+For reference, if you don't want to roll your own:
 
 * [Server test project](https://github.com/mikerochip/server-websocket-tester)
 * [Client test project](https://github.com/mikerochip/unity-websocket-tester)
@@ -312,7 +309,7 @@ private void ConfigureBinaryPings()
 }
 ```
 
-### Enable Round Trip Time (RTT) Tracking
+### Ping Timing (Round-Trip-Time Tracking)
 ```CSharp
 private void Awake()
 {
@@ -398,7 +395,6 @@ If you must use self-signed certificates, then there is a way to make that work 
 
 # Attribution
 
-Based on [this repo](https://github.com/endel/NativeWebSocket) by Endel Dreyer, which was\
-Based on [this repo](https://github.com/jirihybek/unity-websocket-webgl) by Jiri Hybek
+Based on [this repo](https://github.com/endel/NativeWebSocket) by Endel Dreyer, which was based on [this repo](https://github.com/jirihybek/unity-websocket-webgl) by Jiri Hybek
 
 See [license](./LICENSE.md) and [third party notices](./THIRD%20PARTY%20NOTICES.md) for full attribution.
