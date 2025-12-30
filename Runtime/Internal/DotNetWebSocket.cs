@@ -127,13 +127,6 @@ namespace MikeSchweitzer.WebSocket.Internal
 
                 if (_selfSignedCert != null && _selfSignedCertPassword != null)
                 {
-                    var prevSecurityProtocol = ServicePointManager.SecurityProtocol;
-                    ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-                    var prevServerCertificateValidationCallback = ServicePointManager.ServerCertificateValidationCallback;
-                    ServicePointManager.ServerCertificateValidationCallback = SelfSignedCertTrust;
-                    //var prevCertPolicy = ServicePointManager.CertificatePolicy;
-                    //ServicePointManager.CertificatePolicy = new SelfSignedCertTrustPolicy();
-
                     using (var password = new SecureString())
                     {
                         foreach (var c in _selfSignedCertPassword)
@@ -143,10 +136,6 @@ namespace MikeSchweitzer.WebSocket.Internal
                         _socket.Options.ClientCertificates.Add(cert);
                         _socket.Options.RemoteCertificateValidationCallback = SelfSignedCertTrust;
                     }
-
-                    //ServicePointManager.CertificatePolicy = prevCertPolicy;
-                    ServicePointManager.ServerCertificateValidationCallback = prevServerCertificateValidationCallback;
-                    ServicePointManager.SecurityProtocol = prevSecurityProtocol;
                 }
 
                 await _socket.ConnectAsync(_uri, _cancellationToken);
@@ -187,11 +176,9 @@ namespace MikeSchweitzer.WebSocket.Internal
         public async Task ProcessMessagesAsync()
         {
             await ProcessOutgoingMessagesAsync();
-            // If we have _tempOutgoingMessages, that means we're currently processing outgoing
-            // messages. We always want to process outstanding outgoing before incoming messages,
-            // so we want to wait for that to finish first.
-            if (_workingOutgoingMessages.Count == 0)
-                ProcessIncomingMessages();
+            // process all outgoing messages before incoming ones since it's possible an
+            // outgoing msg directly results in an incoming msg disconnecting us
+            ProcessIncomingMessages();
         }
 
         public async Task CloseAsync()
@@ -361,7 +348,7 @@ namespace MikeSchweitzer.WebSocket.Internal
                 }
             }
 
-            close:
+        close:
             if (!_closeRequested && result?.CloseStatus.HasValue == true)
                 await _socket.CloseAsync(result.CloseStatus.Value, result.CloseStatusDescription, _cancellationToken);
         }
@@ -397,7 +384,7 @@ namespace MikeSchweitzer.WebSocket.Internal
     {
         public ConfiguredTaskAwaitable.ConfiguredTaskAwaiter GetAwaiter()
         {
-            return Task.Run(() => {}).ConfigureAwait(false).GetAwaiter();
+            return Task.Run(() => { }).ConfigureAwait(false).GetAwaiter();
         }
     }
 
@@ -463,20 +450,5 @@ namespace MikeSchweitzer.WebSocket.Internal
             MainThreadSyncContext.Post(_ => Instance.StartCoroutine(coroutine), null);
         }
     }
-    #endregion
-
-    #region Certs
-    // this enables self-signed certs to work
-    // internal class SelfSignedCertTrustPolicy : ICertificatePolicy
-    // {
-    //     public bool CheckValidationResult(
-    //         ServicePoint servicePoint,
-    //         X509Certificate certificate,
-    //         WebRequest request,
-    //         int certificateProblem)
-    //     {
-    //         return true;
-    //     }
-    // }
     #endregion
 }
