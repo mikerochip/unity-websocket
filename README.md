@@ -19,16 +19,15 @@
 
 # Why Use This?
 
-`WebSocketConnection` is easier to use and has better write-once support across platforms.
+`WebSocketConnection` has the most ergonomic, write-once support across platforms:
 
 | Supports               | `WebSocketConnection` | `NativeWebSocket` | `System.Net.WebSockets.ClientWebSocket` |
 | ---------------------- | --------------------- | ----------------- | --------------------------------------- |
-| WebGL                  | ✅                     | ✅                 | ⛔️                                       |
-| `WebAssembly.Table`    | ✅                     | ⛔️                 | ⛔️                                       |
-| Requires using `async` | ✅ Optional            | ⚠️ Required        | ⚠️ Required                              |
-| Code changes for WebGL | ✅ None                | ⚠️ Requires `#if`  | ⛔️ Need custom `jslib`                   |
-| Self-signed certs      | ✅ non-Web             | ⛔️                 | ✅ non-Web                               |
-| Write-once ping-pong   | ✅                     | ⛔️                 | ⛔️                                       |
+| WebGL                  | ✅                     | ✅                 | ⛔️ Need custom `jslib`                 |
+| `WebAssembly.Table`    | ✅                     | ✅                 | ⛔️                                     |
+| Optional `async`       | ✅                     | ⛔️                 | ⛔️                                     |
+| Self-signed certs      | ✅ non-Web             | ⛔️                 | ✅ non-Web                             |
+| Write-once ping-pong   | ✅                     | ⛔️                 | ⛔️                                     |
 
 # Installation
 
