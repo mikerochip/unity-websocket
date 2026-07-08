@@ -434,6 +434,7 @@ namespace MikeSchweitzer.WebSocket
                 MaxSendBytes = src.MaxSendBytes,
                 PingInterval = src.PingInterval,
                 PingMessage = src.PingMessage?.Clone(),
+                ShouldPingWaitForPong =  src.ShouldPingWaitForPong,
                 CanDebugLog = src.CanDebugLog,
                 DotNetSelfSignedCert = src.DotNetSelfSignedCert,
                 DotNetSelfSignedCertPassword = src.DotNetSelfSignedCertPassword,
